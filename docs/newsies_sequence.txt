@@ -1,0 +1,14 @@
+title This is a title
+
+User->Newsies: start service
+Newsies->APNews.Com: retrieve daily news stories
+Newsies->ChromaDB: Story and embedding archival
+Newsies->googlePegasusLarge: story summarization
+Newsies->ChromaDB: Summary embedding archival
+User->Newsies: conversational request regarding news content
+Newsies->facebookBartLargeLMI: request intent analysis and relevent context retrieval
+Newsies->ChromaDB: request RAG content
+Newsies->MetaLlama: request + RAG context
+MetaLlama->Newsies: response generation
+Newsies->ChromaDB: Context embedding and storage
+Newsies->User: response presentation
