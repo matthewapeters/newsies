@@ -1,4 +1,4 @@
-title This is a title
+title Newsies Application Flow
 
 User->Newsies: start service
 Newsies->APNews.Com: retrieve daily news stories
