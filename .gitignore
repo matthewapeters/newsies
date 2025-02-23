@@ -6,3 +6,5 @@ newsies.egg-info
 daily_news/2025*/*
 junit/*
 .vscode
+__pycache__/*
+*.pyc

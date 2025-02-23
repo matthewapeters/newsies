@@ -1,12 +1,21 @@
 from newsies.chroma_client import CRMADB
 from newsies.classify import prompt_analysis
+from newsies.llm import LLM as llm
 
 
-def read_news():
+def read_news(archive_date: str):
     """
     read_news:
       - read news from the database
     """
+    collection = f"ap_news_{archive_date}"
+    existing_collections = CRMADB.client.list_collections()
+    print(existing_collections)
+    if collection in existing_collections:
+        CRMADB.collection = collection
+    else:
+        print(f"collection {collection} does not exist - run newsies get-news")
+        return
 
     exit_now = False
     while exit_now == False:
