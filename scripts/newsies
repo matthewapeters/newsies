@@ -38,6 +38,15 @@ case $flag in
         docker compose stats
         popd &>/dev/null
         ;;
+    get-news)
+        python -m newsies.main get-news
+        ;;
+    cli)
+        python -m newsies.main cli
+        ;;
+    serve)
+        python -m newsies.main serve
+        ;;
     chroma-logs)
         echo "Chroma Logs"
         echo "-------------"
@@ -53,7 +62,13 @@ case $flag in
         ;;
 
     *)
-        echo "Usage: newsies [start|stop|chroma-stats|chroma-logs]"
+        echo "Usage: newsies [routine]"
+        echo "get-news"
+        echo "cli"
+        echo "start"
+        echo "stop"
+        echo "chroma-stats"
+        echo "chroma-logs"
         ;;
 esac
 
