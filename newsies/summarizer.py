@@ -1,4 +1,4 @@
-from newsies.chromadb_client.main import ChromaDBClient
+from newsies.chromadb_client import ChromaDBClient
 import torch
 import re
 from transformers import PegasusForConditionalGeneration, PegasusTokenizer

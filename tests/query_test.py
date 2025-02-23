@@ -5,6 +5,8 @@ from newsies.llm import LLM as llm
 from newsies.chroma_client import CRMADB
 
 query_data = [("any stories about science today?", "")]
+collection = f"ap_news_2025-02-21"
+CRMADB.collection = collection
 
 
 @pytest.mark.parametrize("query, expected", query_data)

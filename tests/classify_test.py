@@ -2,8 +2,6 @@ import json
 import pytest
 
 
-# from newsies.main import CRMADB
-from newsies.ap_news.main import PAGES
 from newsies.classify import (
     prompt_analysis,
 )

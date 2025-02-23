@@ -1,11 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Pool
 
-from newsies.ap_news.main import get_latest_news, get_article
+from newsies.ap_news import get_article
 from newsies.chroma_client import CRMADB
-from newsies.chromadb_client.main import ChromaDBClient
-from newsies.classify import prompt_analysis
-from newsies.llm import LLM as llm, identify_themes, identify_entities
 from newsies.summarizer import summarize_story
 
 

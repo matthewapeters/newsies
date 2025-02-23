@@ -1,5 +1,5 @@
 from datetime import datetime
-from newsies.chromadb_client.main import ChromaDBClient
+from newsies.chromadb_client import ChromaDBClient
 
 CRMADB = ChromaDBClient()
 CRMADB.language = "en"

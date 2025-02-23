@@ -10,6 +10,8 @@ from sentence_transformers import SentenceTransformer
 from typing import List, Union
 import os
 
+from newsies.session import Session
+
 
 CHROMA_HOST = "CHROMADB_HOST"
 CHROMA_PORT = "CHROMADB_PORT"
@@ -214,41 +216,45 @@ class ChromaDBClient:
     def retrieve_documents(
         self, query: str, query_analysis: dict, meta: str, results: int = 5
     ) -> List[str]:
+
         query_vector = self._embed_model.encode([query]).tolist()[0]
         # Query the chromadb collection and get the set of story URIs
         # that are most similar to the query
 
-        print(query_analysis)
+        query_type = (
+            "story"
+            if query_analysis["theme"] == "DOCUMENT"
+            else query_analysis["theme"]
+        )
+
+        where_clause = {
+            "$and": [
+                {
+                    "$or": [
+                        {"category0": {"$in": query_analysis["categories"]}},
+                        {"category1": {"$in": query_analysis["categories"]}},
+                        {"category2": {"$in": query_analysis["categories"]}},
+                    ]
+                },
+                {"type": {"$eq": query_type}},
+            ]
+        }
 
         embedded_results = self.collection.query(
             query_embeddings=[query_vector],
             n_results=results,
-            where={
-                "$and": [
-                    {
-                        "$or": [
-                            {"category0": {"$in": query_analysis["categories"]}},
-                            {"category1": {"$in": query_analysis["categories"]}},
-                            {"category2": {"$in": query_analysis["categories"]}},
-                        ]
-                    },
-                    {
-                        "type": {
-                            "$eq": (
-                                "story"
-                                if query_analysis["theme"] == "DOCUMENT"
-                                else query_analysis["theme"]
-                            )
-                        }
-                    },
-                ]
-            },
+            where=where_clause,
         )
 
         return embedded_results
 
     def generate_rag_response(
-        self, query: str, query_analysis: dict, llm: object, results: int = 5
+        self,
+        query: str,
+        query_analysis: dict,
+        llm: object,
+        results: int = 5,
+        session: Session = None,
     ):
         """
         generate_rag_response:
@@ -278,5 +284,7 @@ class ChromaDBClient:
         prompt = f"Context: {{\n{context}\n}}\nQuestion: {query}\nAnswer:"
 
         response = llm.generate(prompt)
+
+        # response needs to be added to running context
 
         return response

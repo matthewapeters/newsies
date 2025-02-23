@@ -32,7 +32,7 @@ if __name__ == "__main__":
     else:
         match sys.argv[1]:
             case "get-news":
-                from newsies.news_loader.main import (
+                from newsies.news_loader import (
                     get_latest_news,
                     news_loader,
                     news_summarizer,
@@ -44,7 +44,7 @@ if __name__ == "__main__":
             case "serve":
                 pass
             case "cli":
-                from newsies.cli.main import read_news
+                from newsies.cli import read_news
 
                 date_archive = datetime.now().strftime(r"%Y-%m-%d")
                 if len(sys.argv) > 3:

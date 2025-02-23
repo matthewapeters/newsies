@@ -7,7 +7,6 @@ from datetime import datetime
 import os
 from random import randint
 import requests
-from typing import List
 import time
 
 

@@ -1,7 +1,6 @@
 from gpt4all import GPT4All
 
-from newsies.chromadb_client.main import ChromaDBClient
-from newsies.ap_news.main import PAGES
+from newsies.chromadb_client import ChromaDBClient
 import torch
 
 # Load GPT4All model from local path
