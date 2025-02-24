@@ -211,7 +211,7 @@ class ChromaDBClient:
         )
 
     def retrieve_documents(
-        self, query: str, query_analysis: dict, meta: str, results: int = 5
+        self, query: str, query_analysis: dict, meta: str, qty_results: str
     ) -> List[str]:
 
         query_vector = self._embed_model.encode([query]).tolist()[0]
@@ -237,10 +237,16 @@ class ChromaDBClient:
             ]
         }
 
-        embedded_results = self.collection.query(
-            query_embeddings=[query_vector],
-            n_results=results,
-            where=where_clause,
-        )
+        params = {
+            "query_embeddings": [query_vector],
+            "where": where_clause,
+        }
+        print(f"qty_results: {qty_results}")
+        if qty_results != "ALL":
+            params["n_results"] = 1 if qty_results == "ONE" else 10
+
+        print(f"\n QUERY PARAMS: {params}\n")
+        embedded_results = self.collection.query(**params)
+        print(f"found {len(embedded_results["ids"][0])} results")
 
         return embedded_results

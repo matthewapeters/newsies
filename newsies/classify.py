@@ -19,9 +19,10 @@ _default_themes = {
     "read an article": "DOCUMENT",
     "any news stories": "DOCUMENT",
     "list headlines about a common person, place, or thing": "DOCUMENT",
+    "list headlines from all stories or from a category of stories": "DOCUMENT",
     "people, places, things in the news": "ENTITY",
-    "summary of multiple new stories": "SUMMARY",
-    "common themes in multiple stories": "SUMMARY",
+    "statistical summary of multiple new stories": "SUMMARY",
+    "common narrative themes in multiple stories": "SUMMARY",
 }
 
 
@@ -70,13 +71,37 @@ def categorize_text(text, labels):
     return categories
 
 
+def determine_quantities(query):
+    heuristics = {
+        "referring to one story or article, story, person, place or thing": "ONE",
+        "referring to more than one, but less than all articles, stories, people, places or things": "MANY",
+        "referring to all articles, stories, people, places or things": "ALL",
+        "request is for the full set of articles, stories, people, places or things from a category": "ALL",
+    }
+    return heuristics[categorize_text(query, list(heuristics.keys()))[0]]
+
+
+def new_or_old_query(query):
+    heuristics = {
+        "refers to new query": "NEW",
+        "introduces a change of topic": "NEW",
+        "refers to prior query or prompt": "OLD",
+        "refers somthing we talked about before": "OLD",
+    }
+    classification = categorize_text(query, list(heuristics.keys()))[0]
+    print(f"\nCLASSIFICATION: {classification}\n")
+    return heuristics[classification]
+
+
 def prompt_analysis(query) -> str:
     """
     prompt_analysis:
       - Analyze a prompt
     """
 
-    theme = THEME_MAP[categorize_text(query, list(THEME_MAP.keys()))[0]]
+    theme_classification = categorize_text(query, list(THEME_MAP.keys()))[0]
+    print(f"\nTHEME CLASSIFICATION: {theme_classification}\n")
+    theme = THEME_MAP[theme_classification]
 
     categories = categorize_text(
         query,
@@ -93,4 +118,11 @@ def prompt_analysis(query) -> str:
             "oddities",
         ],
     )[:3]
-    return {"theme": theme, "categories": categories}
+    quantity = determine_quantities(query)
+    new_or_old = new_or_old_query(query)
+    return {
+        "context": new_or_old,
+        "theme": theme,
+        "categories": categories,
+        "quantity": quantity,
+    }
