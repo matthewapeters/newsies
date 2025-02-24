@@ -20,7 +20,7 @@ def read_news(archive_date: str):
 
     exit_now = False
 
-    session = Session()
+    session = Session(llm, CRMADB)
 
     while exit_now == False:
 
@@ -32,12 +32,4 @@ def read_news(archive_date: str):
         elif query == "":
             continue
         else:
-
-            # analyze request
-            request_meta = prompt_analysis(query)
-            print(f"(newsies thinks you want to know about {request_meta})")
-            # Generate response using GPT4All
-            response = CRMADB.generate_rag_response(
-                query.lower(), request_meta, llm, 5, session
-            )
-            print("\nRESPONSE:\n", response)
+            session.query(query)
