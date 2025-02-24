@@ -32,7 +32,7 @@ if __name__ == "__main__":
     else:
         match sys.argv[1]:
             case "get-news":
-                from newsies.news_loader import (
+                from newsies.ap_news import (
                     get_latest_news,
                     news_loader,
                     news_summarizer,
