@@ -18,8 +18,8 @@ class Session:
         self.id: uuid.UUID = uuid.uuid4()
         self._llm: GPT4All = llm
         self._archivedb = archive_db
-        self._db = ChromaDBClient()
-        self._db.collection = self.id
+        self._sessiondb = ChromaDBClient()
+        self._sessiondb.collection = self.id
         self.history = []
         self._context = {}
 
@@ -45,31 +45,30 @@ class Session:
             query, query_analysis, "text", results
         )
 
-        self._add("embedded_results", embedded_results)
+        if len(embedded_results["ids"]) > 0:
+            self._add("embedded_results", embedded_results)
 
-        context = ""
+            summary_raw = self.collection.get(
+                ids=embedded_results["ids"][0], include=["documents"]
+            )
 
-        summary_raw = self.collection.get(
-            ids=embedded_results["ids"][0], include=["documents"]
-        )
+            self._add("summary_raw", summary_raw)
 
-        self._add("summary_raw", summary_raw)
+            summaries = {
+                summary_raw["ids"][i]: summary_raw["documents"][i]
+                for i in range(len(summary_raw["ids"]))
+            }
 
-        summaries = {
-            summary_raw["ids"][i]: summary_raw["documents"][i]
-            for i in range(len(summary_raw["ids"]))
-        }
+            self._add("summaries", summaries)
 
-        self._add("summaries", summaries)
+            result_count = len(embedded_results["ids"][0])
+            for i in range(result_count):
+                context += f"document {i}: {embedded_results['ids'][0][i]}\n"
+                context += f"uri: {embedded_results['metadatas'][0][i]['uri']}\n"
+                context += f"title(s): {embedded_results['metadatas'][0][i]['headlines']}\n"
+                context += f"summary: {summaries[embedded_results['ids'][0][i]]}\n"
 
-        result_count = len(embedded_results["ids"][0])
-        for i in range(result_count):
-            context += f"document {i}: {embedded_results['ids'][0][i]}\n"
-            context += f"uri: {embedded_results['metadatas'][0][i]['uri']}\n"
-            context += f"title(s): {embedded_results['metadatas'][0][i]['headlines']}\n"
-            context += f"summary: {summaries[embedded_results['ids'][0][i]]}\n"
-
-        prompt = f"Context: {{\n{context}\n}}\nQuestion: {query}\nAnswer:"
+            prompt = f"Context: {{\n{context}\n}}\nQuestion: {query}\nAnswer:"
 
         response = self._llm.generate(prompt)
 
