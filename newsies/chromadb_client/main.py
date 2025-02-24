@@ -4,13 +4,10 @@ newsies.chromadb.client
 
 import chromadb
 from chromadb.config import Settings
-from datetime import datetime
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
 from typing import List, Union
 import os
-
-from newsies.session import Session
 
 
 CHROMA_HOST = "CHROMADB_HOST"

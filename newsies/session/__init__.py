@@ -2,4 +2,4 @@
 newsies.session
 """
 
-from main import Session
+from .main import Session

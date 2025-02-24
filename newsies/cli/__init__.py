@@ -2,4 +2,4 @@
 newsies.cli
 """
 
-from main import read_news
+from .main import read_news

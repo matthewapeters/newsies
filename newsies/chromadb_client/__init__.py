@@ -2,4 +2,4 @@
 newsies.chromadb_client
 """
 
-from main import ChromaDBClient
+from .main import ChromaDBClient

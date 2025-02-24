@@ -65,7 +65,9 @@ class Session:
             for i in range(result_count):
                 context += f"document {i}: {embedded_results['ids'][0][i]}\n"
                 context += f"uri: {embedded_results['metadatas'][0][i]['uri']}\n"
-                context += f"title(s): {embedded_results['metadatas'][0][i]['headlines']}\n"
+                context += (
+                    f"title(s): {embedded_results['metadatas'][0][i]['headlines']}\n"
+                )
                 context += f"summary: {summaries[embedded_results['ids'][0][i]]}\n"
 
             prompt = f"Context: {{\n{context}\n}}\nQuestion: {query}\nAnswer:"
@@ -76,4 +78,3 @@ class Session:
         self._add("response", response)
 
         print("\nRESPONSE:\n", response)
-,
