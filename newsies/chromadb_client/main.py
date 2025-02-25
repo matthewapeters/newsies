@@ -223,29 +223,46 @@ class ChromaDBClient:
             if query_analysis["theme"] == "DOCUMENT"
             else query_analysis["theme"]
         )
-
-        where_clause = {
-            "$and": [
-                {
-                    "$or": [
-                        {"category0": {"$in": query_analysis["categories"]}},
-                        {"category1": {"$in": query_analysis["categories"]}},
-                        {"category2": {"$in": query_analysis["categories"]}},
+        categories = query_analysis["categories"]
+        where_clause = {"type": {"$eq": query_type}}
+        match len(categories):
+            case 0:
+                pass
+            case 1:
+                where_clause = {
+                    "$and": [{"category0": {"$eq": categories[0]}}, where_clause]
+                }
+            case _:
+                where_clause = {
+                    "$and": [
+                        {
+                            "$or": [
+                                {f"category{i}": {"$eq": categories[i]}}
+                                for i in range(len(categories))
+                            ]
+                        },
+                        where_clause,
                     ]
-                },
-                {"type": {"$eq": query_type}},
-            ]
-        }
+                }
 
         params = {
             "query_embeddings": [query_vector],
             "where": where_clause,
         }
-        print(f"qty_results: {qty_results}")
-        if qty_results != "ALL":
-            params["n_results"] = 1 if qty_results == "ONE" else 10
+        match qty_results:
+            case "ONE":
+                params["n_results"] = 1
+            case "MANY":
+                params["n_results"] = 10
+            case "ALL":
+                collection_count = self.collection.count()
+                params["n_results"] = collection_count
+                # do not set a limit
+                pass
+            case _:
+                pass
 
-        print(f"\n QUERY PARAMS: {params}\n")
+        # print(f"\n QUERY PARAMS: {params}\n")
         embedded_results = self.collection.query(**params)
         print(f"found {len(embedded_results["ids"][0])} results")
 

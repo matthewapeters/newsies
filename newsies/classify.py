@@ -18,11 +18,14 @@ _default_themes = {
     "detailed news story": "DOCUMENT",
     "read an article": "DOCUMENT",
     "any news stories": "DOCUMENT",
-    "list headlines about a common person, place, or thing": "DOCUMENT",
-    "list headlines from all stories or from a category of stories": "DOCUMENT",
-    "people, places, things in the news": "ENTITY",
-    "statistical summary of multiple new stories": "SUMMARY",
-    "common narrative themes in multiple stories": "SUMMARY",
+    "statistical summary of multiple news stories": "DOCUMENT",
+    "common narrative themes in multiple stories": "DOCUMENT",
+    "list headlines about a common person, place, or thing": "HEADLINE",
+    "list headlines from all stories or from a category of stories": "HEADLINE",
+    "common themes in multiple headlines": "HEADLINE",
+    "staticical summary of multiple headlines": "HEADLINE",
+    "people, places, things in the mutliple news stories": "ENTITY",
+    "people, places, things in multiple headlines": "ENTITY",
 }
 
 
@@ -64,11 +67,15 @@ refresh_themes()
 
 
 # Function to classify text using zero-shot classification
-def categorize_text(text, labels):
-
-    result = categorizer(text, labels)
-    categories = result["labels"]
-    return categories
+def categorize_text(text, labels, threshold=0.5):
+    result = categorizer(text, labels, multi_label=False)
+    if threshold:
+        return [
+            k
+            for k, v in dict(zip(result["labels"], result["scores"])).items()
+            if v >= threshold
+        ]
+    return result["labels"]
 
 
 def determine_quantities(query):
@@ -77,8 +84,11 @@ def determine_quantities(query):
         "referring to more than one, but less than all articles, stories, people, places or things": "MANY",
         "referring to all articles, stories, people, places or things": "ALL",
         "request is for the full set of articles, stories, people, places or things from a category": "ALL",
+        "request if for each document from one or more categories": "ALL",
     }
-    return heuristics[categorize_text(query, list(heuristics.keys()))[0]]
+    classification = categorize_text(query, list(heuristics.keys()), threshold=None)[0]
+    print(f"\nQUANTITIES: {classification}\n")
+    return heuristics[classification]
 
 
 def new_or_old_query(query):
@@ -90,8 +100,8 @@ def new_or_old_query(query):
         "refers to prior query or prompt": "OLD",
         "refers somthing we talked about before": "OLD",
     }
-    classification = categorize_text(query, list(heuristics.keys()))[0]
-    print(f"\nCLASSIFICATION: {classification}\n")
+    classification = categorize_text(query, list(heuristics.keys()), threshold=None)[0]
+    print(f"\nNEW OR OLD: {classification}\n")
     return heuristics[classification]
 
 
@@ -99,13 +109,14 @@ def determine_action(query):
     heuristics = {
         "read an article": "READ",
         "list one or more titles": "LIST-HEADLINE",
-        "list onew or more headlines": "LIST-HEADLINE",
+        "list one or more headlines": "LIST-HEADLINE",
+        "enumerate or list stories": "LIST-HEADLINE",
         "count articles": "COUNT",
         "summarize multiple articles together": "SYNTHESIZE",
-        "summarize a single article": "SUMMARY",
+        "summarize a single article": "SUMMARIZE",
     }
-    classification = categorize_text(query, list(heuristics.keys()))[0]
-    print(f"\nCLASSIFICATION: {classification}\n")
+    classification = categorize_text(query, list(heuristics.keys()), threshold=None)[0]
+    print(f"\nACTION: {classification}\n")
     return heuristics[classification]
 
 
@@ -115,7 +126,9 @@ def prompt_analysis(query) -> str:
       - Analyze a prompt
     """
 
-    theme_classification = categorize_text(query, list(THEME_MAP.keys()))[0]
+    theme_classification = categorize_text(
+        query, list(THEME_MAP.keys()), threshold=None
+    )[0]
     print(f"\nTHEME CLASSIFICATION: {theme_classification}\n")
     theme = THEME_MAP[theme_classification]
 

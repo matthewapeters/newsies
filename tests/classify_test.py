@@ -2,9 +2,7 @@ import json
 import pytest
 
 
-from newsies.classify import (
-    prompt_analysis,
-)
+from newsies.classify import prompt_analysis, categorize_text, THEME_MAP
 
 prompt_test_data = [
     (
@@ -53,3 +51,57 @@ def test__classify_prompt_analysis(query, expected):
         ), f"expected {expected['category']} to be in categories, but only found {analysis['categories']}"
     except Exception as e:
         assert False, f"Error: {e}\t{result}"
+
+
+def test__list_science_headlines():
+    query = "list the headlines from each of the articles in today's science section"
+    intent = prompt_analysis(query)
+    assert intent["context"] == "NEW"
+    assert intent["theme"] == "DOCUMENT"
+    assert intent["categories"][0] == "science"
+    assert intent["quantity"] == "ALL"
+    assert intent["action"] == "LIST-HEADLINE"
+
+    query = "what is the most common themes from the list of headlines in the last prompt, ordered by the number of stories"
+    intent = prompt_analysis(query)
+    assert intent["context"] == "OLD"
+    assert intent["theme"] == "DOCUMENT"
+    # assert intent["categories"][0] == "science"
+    assert intent["quantity"] == "ALL"
+    assert intent["action"] == "LIST-HEADLINE"
+
+
+def test_categories():
+
+    category_list = [
+        "world-news",
+        "us-news",
+        "politics",
+        "business",
+        "technology",
+        "science",
+        "health",
+        "entertainment",
+        "sports",
+        "oddities",
+    ]
+    query = "list the headlines from each of the articles in today's science section"
+
+    theme_classification = categorize_text(
+        query, list(THEME_MAP.keys()), threshold=None
+    )[:1]
+    assert len(theme_classification) == 1
+
+    categories = categorize_text(
+        query,
+        category_list,
+    )[:3]
+    assert len(categories) == 1
+    assert categories[0] == "science"
+
+    query = "what is the most common themes from the list of headlines in the last prompt, ordered by the number of stories"
+    categories = categorize_text(
+        query,
+        category_list,
+    )[:3]
+    assert len(categories) == 0
