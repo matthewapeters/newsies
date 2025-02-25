@@ -46,7 +46,7 @@ if __name__ == "__main__":
             case "cli":
                 from newsies.cli import read_news
 
-                date_archive = datetime.now().strftime(r"%Y-%m-%d")
+                date_archive: str = None
                 if len(sys.argv) > 3:
                     date_archive = sys.argv[2]
                 read_news(date_archive)

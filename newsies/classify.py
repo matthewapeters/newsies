@@ -83,10 +83,26 @@ def determine_quantities(query):
 
 def new_or_old_query(query):
     heuristics = {
+        "refers to 'today'": "NEW",
+        "refers to 'on this day'": "NEW",
         "refers to new query": "NEW",
         "introduces a change of topic": "NEW",
         "refers to prior query or prompt": "OLD",
         "refers somthing we talked about before": "OLD",
+    }
+    classification = categorize_text(query, list(heuristics.keys()))[0]
+    print(f"\nCLASSIFICATION: {classification}\n")
+    return heuristics[classification]
+
+
+def determine_action(query):
+    heuristics = {
+        "read an article": "READ",
+        "list one or more titles": "LIST-HEADLINE",
+        "list onew or more headlines": "LIST-HEADLINE",
+        "count articles": "COUNT",
+        "summarize multiple articles together": "SYNTHESIZE",
+        "summarize a single article": "SUMMARY",
     }
     classification = categorize_text(query, list(heuristics.keys()))[0]
     print(f"\nCLASSIFICATION: {classification}\n")
@@ -120,9 +136,11 @@ def prompt_analysis(query) -> str:
     )[:3]
     quantity = determine_quantities(query)
     new_or_old = new_or_old_query(query)
+    action = determine_action(query)
     return {
         "context": new_or_old,
         "theme": theme,
         "categories": categories,
         "quantity": quantity,
+        "action": action,
     }
