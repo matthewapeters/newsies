@@ -105,3 +105,30 @@ def test_categories():
         category_list,
     )[:3]
     assert len(categories) == 0
+
+
+article_reference_test_data = [
+    ("read the first artcile from the list", "1"),
+    ("read the second article from the list", "2"),
+]
+
+
+@pytest.mark.parametrize("input, expected", article_reference_test_data)
+def test__article_reference(input, expected):
+    labels = {
+        "first": "1",
+        "second": "2",
+        "third": "3",
+        "fourth": "4",
+        "fifth": "5",
+        "sixth": "6",
+        "seventh": "7",
+        "eighth": "8",
+        "ninth": "9",
+        "tenth": "10",
+        "last": "-1",
+    }
+    quantity = categorize_text(input, list(labels.keys()), 0.5)
+    assert (
+        expected == labels[quantity[0]]
+    ), f"expected {expected} but got key of {quantity}"
