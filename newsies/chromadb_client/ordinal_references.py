@@ -1,7 +1,13 @@
+"""
+newsies.chromadb_client.ordinal_references
+"""
+
 import inflect
 from sentence_transformers import SentenceTransformer
 
 from .main import ChromaDBClient
+
+# pylint: disable=invalid-name
 
 # Load Sentence Transformer model
 model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -10,7 +16,7 @@ p = inflect.engine()
 client = ChromaDBClient()
 client.collection = "ordinal_reference"
 # Define range of ordinal numbers to store (can be extended)
-ordinal_limit = 1000
+ORDINAL_LIMIT = 1000
 
 
 def load_ordinals():
@@ -32,7 +38,7 @@ def load_ordinals():
         )
 
     # Store ordinal references in ChromaDB
-    for i in range(ordinal_limit):
+    for i in range(ORDINAL_LIMIT):
         embed(make_text_ordinal(i))
         embed(make_numeric_ordinal(i))
 
@@ -43,7 +49,7 @@ def find_ordinal(text):
 
     # Perform a similarity search
     results = client.collection.query(
-        query_embeddings=[query_embedding], n_results=1  # Get the top match
+        query_embeddings=[query_embedding], n_results=2  # Get the top match
     )
 
     if results["documents"] and results["metadatas"][0]:
@@ -51,6 +57,7 @@ def find_ordinal(text):
         return {
             "number": best_match["number"],
             "text": best_match["text"],
+            "distance": results["distances"][0][0],
         }
     return None  # No match found
 
@@ -151,6 +158,6 @@ def make_text_ordinal(nbr: int) -> str:
     return f"{multiples_of_tens[tens_factor]}-{named_ordinals[remaining]}"
 
 
-count = client.collection.count()
-if count + 1 < ordinal_limit:
+_count = client.collection.count()
+if _count + 1 < ORDINAL_LIMIT:
     load_ordinals()

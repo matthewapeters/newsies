@@ -1,5 +1,7 @@
 import sys
-from datetime import datetime
+from typing import Dict
+
+from newsies.ap_news.document_structures import Document
 
 
 def usage():
@@ -38,7 +40,7 @@ if __name__ == "__main__":
                     news_summarizer,
                 )
 
-                headlines = get_latest_news()
+                headlines: Dict[str, Document] = get_latest_news()
                 news_loader(headlines)
                 news_summarizer(headlines)
             case "serve":

@@ -2,22 +2,28 @@
 newsies.ap_news.main
 """
 
-from bs4 import BeautifulSoup
-from concurrent.futures import ThreadPoolExecutor
+import os
+import time
+from typing import Dict
 from datetime import datetime
 from multiprocessing import Pool
 from random import randint
-import os
+from concurrent.futures import ThreadPoolExecutor
+
 import requests
-import time
+from bs4 import BeautifulSoup
 
 from newsies.chroma_client import CRMADB
 from newsies.summarizer import summarize_story
+from newsies.targets import DOCUMENT, SUMMARY
+from .document_structures import Headline, Document
 
+
+# pylint: disable=unidiomatic-typecheck
 
 MAX_TRIES = 5
 URL = "https://apnews.com"
-PAGES = [
+SECTIONS = [
     "",
     "world-news",
     "us-news",
@@ -32,13 +38,16 @@ PAGES = [
 ]
 
 
-def get_latest_news():
+def get_latest_news() -> Dict[str:Document]:
+    """
+    get_latest_news
+    """
 
-    headlines = {}
+    headlines: Dict[str, Headline] = {}
 
-    for page in PAGES:
-        print(f"Getting {URL}/{page} news")
-        resp = requests.get(f"{URL}/{page}", allow_redirects=True)
+    for section in SECTIONS:
+        print(f"Getting {URL}/{section} news")
+        resp = requests.get(f"{URL}/{section}", allow_redirects=True, timeout=5)
         results: bytes = resp.content.decode("utf8")
         # print(results)
         soup = BeautifulSoup(results, features="lxml")
@@ -46,30 +55,34 @@ def get_latest_news():
             continue
         items = soup.find_all("a")
         print(f"\tFound {len(items)} links")
-        stories = []
+        raw_headlines = []
         for link in items:
             if (
                 "href" in link.attrs
                 and f"{URL}/article/" in link.attrs["href"]
                 and len(link.text.strip()) > 1
             ):
-                stories.append(link)
+                raw_headlines.append(link)
 
-        stories.sort(key=lambda x: x.text)
-        stories = set(stories)
-        print(f"\tFound {len(stories)} stories in links")
-        for s in stories:
-            headlines[s.text] = {
-                "url": s.attrs["href"],
-                "path": path(s.attrs["href"]),
-                "date": datetime.now().isoformat(),
-                "source": "AP News",
-                "category": page,
-            }
+        raw_headlines.sort(key=lambda x: x.text)
+        # de-dupe headlines
+        headline_list = set(raw_headlines)
+        print(f"\tFound {len(headline_list)} stories in links")
 
-    urls = list(set([v["url"] for v in headlines.values()]))
+        for s in headline_list:
+            headlines[f"{section}: {s.text}"] = Headline(
+                **{
+                    "url": s.attrs["href"],
+                    "path": path(s.attrs["href"]),
+                    "source": "AP News",
+                    "headline": s.text,
+                    "section": section,
+                }
+            )
 
-    documents = {
+    urls = list(set([v.url for v in headlines.values()]))
+
+    documents: Dict[str, Document] = {
         path(url)
         .replace("/", "_")
         .replace(" ", "_")
@@ -77,18 +90,12 @@ def get_latest_news():
         .replace(".", "_"): {
             "url": url,
             "uri": path(url),
-            "type": "story",
             "date": datetime.now().strftime(r"%Y-%m-%d"),
             "source": "AP News",
-            "headlines": "'"
-            + "','".join(
-                list(set([k for k, v in headlines.items() if v["url"] == url]))
-            )
-            + "'",
-            "categories": ",".join(
-                list(
-                    set([v["category"] for v in headlines.values() if v["url"] == url])
-                )
+            "target": DOCUMENT,
+            "headlines": list(set([k for k, v in headlines.items() if v.url == url])),
+            "sections": list(
+                set([v["section"] for v in headlines.values() if v.url == url])
             ),
         }
         for url in urls
@@ -104,13 +111,13 @@ def path(story_url: str):
     return f"./daily_news/{today}/{story}.txt"
 
 
-def get_article(
+def download_article(
     work: tuple,
     backoff: int = 0,
     tries: int = 0,
 ):
     """
-    get_article
+    download_article
 
     get the article from the story_url and write it to a file
 
@@ -124,12 +131,12 @@ def get_article(
     :param work: tuple
         story_url: str - the URL of the story
         headlines: List[str] - a list of headlines for the story
-        categories: List[str] - a list of categories for the story
+        sections: List[str] - a list of sections for the story
     :param backoff: int - the number of seconds to wait before retrying
     :param tries: int - the number of times this function has been called
     """
 
-    story_url, headlines, categories = work
+    story_url, headlines, sections = work
 
     if tries > MAX_TRIES:
         return
@@ -140,7 +147,7 @@ def get_article(
         backoff = randint(1, 5)
         time.sleep(backoff)
 
-    article_resp = requests.get(story_url, allow_redirects=True)
+    article_resp = requests.get(story_url, allow_redirects=True, timeout=5)
 
     match article_resp.status_code:
         case 429:
@@ -150,8 +157,8 @@ def get_article(
                 f"Too many requests, sleeping for {backoff} seconds ({tries + 1} try)"
             )
             time.sleep(backoff)
-            get_article(
-                (story_url, headlines, categories), backoff=backoff, tries=tries + 1
+            download_article(
+                (story_url, headlines, sections), backoff=backoff, tries=tries + 1
             )
             return
         case 200:
@@ -163,40 +170,41 @@ def get_article(
                     ).find_all("p"):
                         fh.write(f"{paragraph.text}\n")
                 except AttributeError:
-                    fh.write(f"Error parsing article\n")
+                    fh.write("Error parsing article\n")
         case _:
             print(f"Error getting article: {article_resp.status_code}")
 
 
-def news_summarizer(headlines: dict):
+def news_summarizer(documents: Dict[str, Document]):
     """
     news_summarizer:
       - Summarize news articles
     """
 
-    def process_story(k, v):
+    def process_story(k: str, v: Document):
         doc_id = k + "_summary"
-        metadata = v.copy()
-        metadata["text"] = summarize_story(v["uri"], CRMADB, doc_id)
-        metadata["type"] = "summary"
+        metadata = Document(**v.dump())
+        # summarize_story will defer to existing summary in chromadb if it exists
+        metadata.text = summarize_story(v.uri, CRMADB, doc_id)
+        metadata.target = SUMMARY
         print(f"Summarized: {k}")
         CRMADB.add_documents({doc_id: metadata})
 
     with ThreadPoolExecutor(
         max_workers=4
     ) as executor:  # Adjust max_workers based on CPU
-        executor.map(lambda kv: process_story(*kv), headlines.items())
+        executor.map(lambda kv: process_story(*kv), documents.items())
 
 
-def news_loader(headlines: dict) -> dict:
+def news_loader(documents: Dict[str, Document]):
     """
     news_loader:
       - Load news articles
     """
     with Pool(processes=8) as ppool:
         ppool.map(
-            get_article,
-            [(v["url"], v["headlines"], v["categories"]) for v in headlines.values()],
+            download_article,
+            [(v.url, v, documents, v.sections) for v in documents.values()],
         )
 
-    CRMADB.add_documents(headlines)
+    CRMADB.add_documents(documents)

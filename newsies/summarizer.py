@@ -64,7 +64,7 @@ def summarize_story(uri: str, CRMADB: ChromaDBClient, doc_id: str = None):
       - Summarize a news article
     """
     if doc_id:
-        cached_summary = CRMADB.collection.get(include=["document"], ids=[doc_id])
+        cached_summary = CRMADB.collection.get(include=["documents"], ids=[doc_id])
         if cached_summary:
             return cached_summary["documents"][0]  # Return cached result
 

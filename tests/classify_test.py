@@ -1,71 +1,54 @@
-import json
 import pytest
 
 
-from newsies.classify import prompt_analysis, categorize_text, THEME_MAP
+from newsies.classify import prompt_analysis, categorize_text, target_MAP
 
-prompt_test_data = [
+target_class_test_data = [
     (
         "Who are the key players in the current rift between the US and Canada?",
-        {"theme": "ENTITY", "category": "us-news"},
+        "ENTITY",
     ),
+    ("Are there any new stories about actor Kevin Kline?", "DOCUMENT"),
+    ("What are the common themes in all of the news stories today?", "DOCUMENT"),
     (
-        "Are there any new stories about actor Kevin Kline?",
-        {"theme": "DOCUMENT", "category": "entertainment"},
+        "What is the concensus about the US President covered in all of the world news today?",
+        "DOCUMENT",
     ),
-    (
-        "What are the common themes in all of the news stories today?",
-        {"theme": "SUMMARY", "category": "world-news"},
-    ),
-    (
-        "What is the concensus about the US President as reported in all of the world news stories?",
-        {"theme": "SUMMARY", "category": "world-news"},
-    ),
+    ("list the first five headlines from the science section", "HEADLINE"),
+    ("how many headlines in the oditties secion today?", "HEADLINE"),
 ]
 
 
-@pytest.mark.parametrize("query, expected", prompt_test_data)
-def test__classify_prompt_analysis(query, expected):
+@pytest.mark.parametrize("query, expected", target_class_test_data)
+def test__target_class(query, expected):
     """
     prompt_analysis:
       - Analyze a prompt
     """
-    result = prompt_analysis(query)
-    assert result
+    analysis = prompt_analysis(query)
     try:
-        analysis = json.loads(result)
-        assert len(analysis) == 2, f"Expected 2 items, got {len(analysis)}"
-        assert "categories" in analysis, f"Expected 'categories' in analysis"
-        assert "theme" in analysis, f"Expected 'theme' in analysis"
-        assert isinstance(
-            analysis["categories"], list
-        ), f"Expected list, got {type(analysis['categories'])}"
-        assert isinstance(
-            analysis["theme"], str
-        ), f"Expected string, got {type(analysis['theme'])}"
+        assert analysis
+        assert "target" in analysis, f"Expected 'target' in analysis, got {analysis}"
         assert (
-            analysis["theme"] == expected["theme"]
-        ), f"Expected {expected['theme']} got {analysis['theme']}"
-        assert (
-            expected["category"] in analysis["categories"]
-        ), f"expected {expected['category']} to be in categories, but only found {analysis['categories']}"
+            expected == analysis["target"]
+        ), f"expected target to be {expected}, got {analysis['target']}"
     except Exception as e:
-        assert False, f"Error: {e}\t{result}"
+        assert False, "ERROR: {e} not expected.  Got {analysis}"
 
 
 def test__list_science_headlines():
     query = "list the headlines from each of the articles in today's science section"
     intent = prompt_analysis(query)
     assert intent["context"] == "NEW"
-    assert intent["theme"] == "DOCUMENT"
+    assert intent["target"] == "HEADLINE"
     assert intent["categories"][0] == "science"
     assert intent["quantity"] == "ALL"
     assert intent["action"] == "LIST-HEADLINE"
 
-    query = "what is the most common themes from the list of headlines in the last prompt, ordered by the number of stories"
+    query = "what is the most common targets from the list of headlines in the last prompt, ordered by the number of stories"
     intent = prompt_analysis(query)
     assert intent["context"] == "OLD"
-    assert intent["theme"] == "DOCUMENT"
+    assert intent["target"] == "HEADLINE"
     # assert intent["categories"][0] == "science"
     assert intent["quantity"] == "ALL"
     assert intent["action"] == "LIST-HEADLINE"
@@ -87,10 +70,10 @@ def test_categories():
     ]
     query = "list the headlines from each of the articles in today's science section"
 
-    theme_classification = categorize_text(
-        query, list(THEME_MAP.keys()), threshold=None
+    target_classification = categorize_text(
+        query, list(target_MAP.keys()), threshold=None
     )[:1]
-    assert len(theme_classification) == 1
+    assert len(target_classification) == 1
 
     categories = categorize_text(
         query,
@@ -99,7 +82,7 @@ def test_categories():
     assert len(categories) == 1
     assert categories[0] == "science"
 
-    query = "what is the most common themes from the list of headlines in the last prompt, ordered by the number of stories"
+    query = "what is the most common targets from the list of headlines in the last prompt, ordered by the number of stories"
     categories = categorize_text(
         query,
         category_list,
@@ -108,27 +91,15 @@ def test_categories():
 
 
 article_reference_test_data = [
-    ("read the first artcile from the list", "1"),
-    ("read the second article from the list", "2"),
+    ("read the first artcile from the list", 1),
+    ("read the second article from the list", 2),
+    ("get the three hundred thirty third article", 333),
 ]
 
 
 @pytest.mark.parametrize("input, expected", article_reference_test_data)
-def test__article_reference(input, expected):
-    labels = {
-        "first": "1",
-        "second": "2",
-        "third": "3",
-        "fourth": "4",
-        "fifth": "5",
-        "sixth": "6",
-        "seventh": "7",
-        "eighth": "8",
-        "ninth": "9",
-        "tenth": "10",
-        "last": "-1",
-    }
-    quantity = categorize_text(input, list(labels.keys()), 0.5)
+def test__classify_with_ordinal(input, expected):
+    categorization = prompt_analysis(input)
     assert (
-        expected == labels[quantity[0]]
-    ), f"expected {expected} but got key of {quantity}"
+        categorization["ordinal"] == expected
+    ), f"expected {expected}, got {categorization}"
