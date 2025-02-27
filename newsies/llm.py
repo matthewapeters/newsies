@@ -1,6 +1,4 @@
 from gpt4all import GPT4All
-
-from newsies.chromadb_client import ChromaDBClient
 import torch
 
 # Load GPT4All model from local path
@@ -28,23 +26,6 @@ def identify_themes(uri: str):
 
     text = (
         """You are a helpful theme identifier. Please identify the themes in the following text:\n\n
-    """
-        + text
-    )
-    response = LLM.generate(text, max_tokens=250)
-    return response
-
-
-def identify_entities(uri: str):
-    """
-    identify_entities:
-      - Identify entities in a news article
-    """
-    with open(uri, "r") as f:
-        text = f.read()
-
-    text = (
-        """You are a helpful entity identifier. Please identify the entities in the following text:\n\n
     """
         + text
     )
