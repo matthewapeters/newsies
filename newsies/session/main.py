@@ -7,9 +7,10 @@ from gpt4all import GPT4All
 
 from newsies.chromadb_client import ChromaDBClient
 from newsies.classify import prompt_analysis
-from newsies.actions import READ, LIST, SUMMARIZE, SYNTHESIZE
 
-# pylint: disable=broad-exception-caught, protected-access, unnecessary-lambda
+from newsies import actions
+
+# pylint: disable=broad-exception-caught, protected-access, unnecessary-lambda, too-many-instance-attributes
 
 
 class Turn:
@@ -52,7 +53,7 @@ class Turn:
     def summaries(self, s):
         self._summaries = s
 
-    def synthesize(
+    def do_synthesize(
         self, include_summaries: bool = True, include_uri: bool = True
     ) -> str:
         """syntehsize"""
@@ -60,7 +61,7 @@ class Turn:
         result_count = len(self.embedded_results["ids"][0])
         context = (
             f"{self.query_analysis["quantity"]} story[s] "
-            f"from categies:{self.query_analysis["categories"]}\n"
+            f"from sections: {', '.join(self.query_analysis["sections"])}\n"
         )
         for i in range(result_count):
             context += f"document {i}: {self.embedded_results['ids'][0][i]}\n"
@@ -68,9 +69,10 @@ class Turn:
                 context += (
                     f"uri {i}: {self.embedded_results['metadatas'][0][i]['uri']}\n"
                 )
-            context += (
-                f"title(s): {self.embedded_results['metadatas'][0][i]['headlines']}\n"
-            )
+            for i in range(3):
+                title = self.embedded_results["metadatas"][0][i][f"headline{i}"]
+                if title != "N/A":
+                    context += "title: {title}\n"
             if include_summaries:
                 context += (
                     f"summary: {self.summaries[self.embedded_results['ids'][0][i]]}\n"
@@ -86,18 +88,18 @@ class Turn:
 
         if len(self._prompt) > 2048 and include_summaries:
             print("\nremoving summaries from context\n")
-            self.synthesize(include_summaries=False)
+            self.do_synthesize(include_summaries=False)
         if len(self._prompt) > 2048 and include_uri:
             print("\nremoving uris from context\n")
-            self.synthesize(include_summaries=False, include_uri=False)
+            self.do_synthesize(include_summaries=False, include_uri=False)
 
-    def read(self, include_summaries: bool = True, include_uri: bool = True) -> str:
+    def do_read(self, include_summaries: bool = True, include_uri: bool = True) -> str:
         """read"""
         context = ""
         result_count = len(self.embedded_results["ids"][0])
         context = (
             f"{self.query_analysis["quantity"]} story[s] from "
-            f"categies:{self.query_analysis["categories"]}\n"
+            f"sections: {",".join(self.query_analysis["sections"])}\n"
         )
         for i in range(result_count):
             context += f"document {i}: {self.embedded_results['ids'][0][i]}\n"
@@ -105,9 +107,11 @@ class Turn:
                 context += (
                     f"uri {i}: {self.embedded_results['metadatas'][0][i]['uri']}\n"
                 )
-            context += (
-                f"title(s): {self.embedded_results['metadatas'][0][i]['headlines']}\n"
-            )
+            for i in range(3):
+                title = self.embedded_results["metadatas"][0][i][f"headline{i}"]
+                if title != "N/A":
+                    context += "title: {title}\n"
+
             if include_summaries:
                 context += f"summary: {self.summaries[self.embedded_results['documents'][0][i]]}\n"
 
@@ -121,18 +125,21 @@ class Turn:
 
         if len(self._prompt) > 2048 and include_summaries:
             print("\nremoving summaries from context\n")
-            self.read(include_summaries=False)
+            self.do_read(include_summaries=False)
         if len(self._prompt) > 2048 and include_uri:
             print("\nremoving uris from context\n")
-            self.read(include_summaries=False, include_uri=False)
+            self.do_read(include_summaries=False, include_uri=False)
 
     def _prep_headline_maps(self):
         result_count = len(self.embedded_results["ids"][0])
         _document_map = {
             i: {
-                self.embedded_results["metadatas"][0][i]["uri"]: self.embedded_results[
-                    "metadatas"
-                ][0][i]["headlines"].split("','")
+                self.embedded_results["metadatas"][0][i]["uri"]: [
+                    self.embedded_results["metadatas"][0][i][f"headline{hidx}"]
+                    for hidx in range(3)
+                    if self.embedded_results["metadatas"][0][i][f"headline{hidx}"]
+                    != "N/A"
+                ]
             }
             for i in range(result_count)
         }
@@ -153,7 +160,7 @@ class Turn:
                     seen.append(hs[0])
                     i += 1
 
-    def list_headlines(self) -> str:
+    def do_list_headlines(self) -> str:
         """list_headlines"""
         context = ""
         if len(self._document_map) == 0:
@@ -165,7 +172,7 @@ class Turn:
         seen = []
         context = (
             f"{self.query_analysis["quantity"]} story[s] "
-            f"from categies:{self.query_analysis["categories"]}\n"
+            f"from sections:{",".join(self.query_analysis["sections"])}\n"
         )
         for i in range(result_count):
             headline = list(self._document_map[i].values())[0]
@@ -183,15 +190,16 @@ class Turn:
 
     def prompt(self) -> str:
         """prompt"""
-        match self.query_analysis["action"]:
-            case SUMMARIZE:
-                self.synthesize(True, True)
-            case SYNTHESIZE:
-                self.synthesize(True, True)
-            case READ:
-                self.read(True, True)
-            case LIST:
-                self.list_headlines()
+        action: str = self.query_analysis["action"]
+        match action:
+            case actions.READ:
+                self.do_read(True, True)
+            case actions.SUMMARIZE:
+                self.do_synthesize(True, True)
+            case actions.SYNTHESIZE:
+                self.do_synthesize(True, True)
+            case actions.LIST:
+                self.do_list_headlines()
 
         return self._prompt
 
