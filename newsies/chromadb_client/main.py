@@ -257,7 +257,7 @@ class ChromaDBClient:
 
         query_type = (
             "story"
-            if query_analysis["target"] == "DOCUMENT"
+            if query_analysis["target"] == DOCUMENT
             else query_analysis["target"]
         )
         sections = query_analysis["sections"]

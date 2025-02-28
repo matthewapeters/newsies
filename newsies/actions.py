@@ -1,0 +1,9 @@
+"""
+newsies.actions
+"""
+
+READ = "READ"
+LIST = "LIST"
+COUNT = "COUNT"
+SUMMARIZE = "SUMMARIZE"
+SYNTHESIZE = "SYNTHESIZE"

@@ -7,7 +7,7 @@ from gpt4all import GPT4All
 
 from newsies.chromadb_client import ChromaDBClient
 from newsies.classify import prompt_analysis
-
+from newsies.actions import READ, LIST, SUMMARIZE, SYNTHESIZE
 
 # pylint: disable=broad-exception-caught, protected-access, unnecessary-lambda
 
@@ -184,13 +184,13 @@ class Turn:
     def prompt(self) -> str:
         """prompt"""
         match self.query_analysis["action"]:
-            case "SUMMARIZE":
+            case SUMMARIZE:
                 self.synthesize(True, True)
-            case "SYNTHESIZE":
+            case SYNTHESIZE:
                 self.synthesize(True, True)
-            case "READ":
+            case READ:
                 self.read(True, True)
-            case "LIST-HEADLINE":
+            case LIST:
                 self.list_headlines()
 
         return self._prompt
@@ -278,7 +278,7 @@ class Session:
             turn.response = last_turn.response
             turn._document_map = last_turn._document_map
 
-        prompt = turn.prompt()
+        prompt: str = turn.prompt()
         print(f"\nPROMPT:\n{prompt}\n-----------------------------------------\n")
 
         turn.response = self._llm.generate(prompt)

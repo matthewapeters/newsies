@@ -8,14 +8,14 @@ target_class_test_data = [
         "Who are the key players in the current rift between the US and Canada?",
         "ENTITY",
     ),
-    ("Are there any new stories about actor Kevin Kline?", "DOCUMENT"),
-    ("What are the common themes in all of the news stories today?", "DOCUMENT"),
+    ("Are there any new stories about actor Kevin Kline?", DOCUMENT),
+    ("What are the common themes in all of the news stories today?", DOCUMENT),
     (
         "What is the concensus about the US President covered in all of the world news today?",
-        "DOCUMENT",
+        DOCUMENT,
     ),
-    ("list the first five headlines from the science section", "HEADLINE"),
-    ("how many headlines in the oditties secion today?", "HEADLINE"),
+    ("list the first five headlines from the science section", HEADLINE),
+    ("how many headlines in the oditties secion today?", HEADLINE),
 ]
 
 
@@ -40,18 +40,18 @@ def test__list_science_headlines():
     query = "list the headlines from each of the articles in today's science section"
     intent = prompt_analysis(query)
     assert intent["context"] == "NEW"
-    assert intent["target"] == "HEADLINE"
+    assert intent["target"] == HEADLINE
     assert intent["categories"][0] == "science"
     assert intent["quantity"] == "ALL"
-    assert intent["action"] == "LIST"
+    assert intent["action"] == LIST
 
     query = "what is the most common targets from the list of headlines in the last prompt, ordered by the number of stories"
     intent = prompt_analysis(query)
     assert intent["context"] == "OLD"
-    assert intent["target"] == "HEADLINE"
+    assert intent["target"] == HEADLINE
     # assert intent["categories"][0] == "science"
     assert intent["quantity"] == "ALL"
-    assert intent["action"] == "LIST"
+    assert intent["action"] == LIST
 
 
 def test_categories():

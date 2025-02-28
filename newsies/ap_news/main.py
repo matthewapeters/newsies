@@ -73,7 +73,7 @@ def get_latest_news() -> Dict[str, Document]:
             headlines[f"{section}: {s.text}"] = Headline(
                 **{
                     "url": s.attrs["href"],
-                    "headline": s.text,
+                    HEADLINE: s.text,
                     "section": section,
                 }
             )

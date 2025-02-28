@@ -6,6 +6,8 @@ import torch
 from transformers import pipeline
 
 from newsies.chromadb_client import find_ordinal, ChromaDBClient
+from newsies.actions import READ, LIST, COUNT, SUMMARIZE  # , SYNTHESIZE
+from newsies.targets import DOCUMENT, HEADLINE  # , SUMMARY
 
 # pylint: disable=global-statement, fixme
 
@@ -27,20 +29,20 @@ categorizer = pipeline(
 
 
 _default_targets = {
-    "story": "DOCUMENT",
-    "stories": "DOCUMENT",
-    "article": "DOCUMENT",
-    "articles": "DOCUMENT",
-    "details news story": "DOCUMENT",
-    "read story": "DOCUMENT",
-    "read article": "DOCUMENT",
-    "any news stories": "DOCUMENT",
-    "headline": "HEADLINE",
-    "title": "HEADLINE",
-    "headlines": "HEADLINE",
-    "titles": "HEADLINE",
-    "list headlines": "HEADLINE",
-    "list titles": "HEADLINE",
+    "story": DOCUMENT,
+    "stories": DOCUMENT,
+    "article": DOCUMENT,
+    "articles": DOCUMENT,
+    "details news story": DOCUMENT,
+    "read story": DOCUMENT,
+    "read article": DOCUMENT,
+    "any news stories": DOCUMENT,
+    HEADLINE: HEADLINE,
+    "title": HEADLINE,
+    "headlines": HEADLINE,
+    "titles": HEADLINE,
+    "list headlines": HEADLINE,
+    "list titles": HEADLINE,
 }
 TARGET_MAP = {}
 
@@ -135,17 +137,17 @@ def new_or_old_query(query):
 def determine_action(query):
     """determine_action"""
     heuristics = {
-        "read an article": "READ",
-        "pull an article": "READ",
-        "read a story": "READ",
-        "pull a story": "READ",
-        "list titles": "LIST",
-        "list headlines": "LIST",
-        "list stories": "LIST",
-        "list articles": "LIST",
-        "count articles": "COUNT",
-        "summary of an article": "SUMMARY",
-        "summary of a story": "SUMMARY",
+        "read an article": READ,
+        "pull an article": READ,
+        "read a story": READ,
+        "pull a story": READ,
+        "list titles": LIST,
+        "list headlines": LIST,
+        "list stories": LIST,
+        "list articles": LIST,
+        "count articles": COUNT,
+        "summary of an article": SUMMARIZE,
+        "summary of a story": SUMMARIZE,
     }
     classification = categorize_text(query, list(heuristics.keys()))[0][0]
     print(f"\nACTION: {classification}\n")
