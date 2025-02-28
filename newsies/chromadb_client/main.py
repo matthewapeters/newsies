@@ -260,34 +260,15 @@ class ChromaDBClient:
             if query_analysis["target"] == DOCUMENT
             else query_analysis["target"]
         )
-        sections = query_analysis["sections"]
+        section = query_analysis["section"]
         where_clause = {"target": {"$eq": query_type}}
-        match len(sections):
+        match len(section):
             case 0:
                 pass
-            case 1:
-                where_clause = {
-                    "$and": [
-                        {
-                            "$or": [
-                                {"section0": {"$eq": sections[0]}},
-                                {"section1": {"$eq": sections[0]}},
-                                {"section2": {"$eq": sections[0]}},
-                            ]
-                        },
-                        where_clause,
-                    ]
-                }
             case _:
                 where_clause = {
                     "$and": [
-                        {
-                            "$or": [
-                                {f"section{j}": {"$eq": sections[i]}}
-                                for i in range(len(sections))
-                                for j in range(3)
-                            ]
-                        },
+                        {"$or": [{f"section{j}": {"$eq": section}} for j in range(3)]},
                         where_clause,
                     ]
                 }

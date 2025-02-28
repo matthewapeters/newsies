@@ -1,7 +1,19 @@
+"""
+tests.classify_test
+"""
+
 import pytest
 
+from newsies.targets import DOCUMENT, HEADLINE
+from newsies.actions import LIST
+from newsies.classify import (
+    prompt_analysis,
+    categorize_text,
+    TARGET_MAP,
+    news_section,
+)
 
-from newsies.classify import prompt_analysis, categorize_text, TARGET_MAP
+# pylint: disable=broad-exception-caught, unused-variable
 
 target_class_test_data = [
     (
@@ -37,6 +49,9 @@ def test__target_class(query, expected):
 
 
 def test__list_science_headlines():
+    """
+    test__list_science_headlines
+    """
     query = "list the headlines from each of the articles in today's science section"
     intent = prompt_analysis(query)
     assert intent["context"] == "NEW"
@@ -45,7 +60,10 @@ def test__list_science_headlines():
     assert intent["quantity"] == "ALL"
     assert intent["action"] == LIST
 
-    query = "what is the most common targets from the list of headlines in the last prompt, ordered by the number of stories"
+    query = (
+        "what is the most common targets from the list of headlines in the "
+        "last prompt, ordered by the number of stories"
+    )
     intent = prompt_analysis(query)
     assert intent["context"] == "OLD"
     assert intent["target"] == HEADLINE
@@ -54,38 +72,23 @@ def test__list_science_headlines():
     assert intent["action"] == LIST
 
 
-def test_categories():
-
-    category_list = [
-        "world-news",
-        "us-news",
-        "politics",
-        "business",
-        "technology",
-        "science",
-        "health",
-        "entertainment",
-        "sports",
-        "oddities",
-    ]
+def test__sections():
+    """test__sections"""
     query = "list the headlines from each of the articles in today's science section"
 
-    target_classification = categorize_text(
-        query, list(TARGET_MAP.keys()), threshold=None
-    )[:1]
+    target_classification = categorize_text(query, list(TARGET_MAP.keys()))[:1]
     assert len(target_classification) == 1
 
-    categories = categorize_text(
-        query,
-        category_list,
-    )[:3]
+    categories = news_section(query)
     assert len(categories) == 1
     assert categories[0] == "science"
 
-    query = "what is the most common targets from the list of headlines in the last prompt, ordered by the number of stories"
-    categories = categorize_text(
+    query = (
+        "what is the most common targets from the list of headlines "
+        "in the last prompt, ordered by the number of stories"
+    )
+    categories = news_section(
         query,
-        category_list,
     )[:3]
     assert len(categories) == 0
 
@@ -97,9 +100,12 @@ article_reference_test_data = [
 ]
 
 
-@pytest.mark.parametrize("input, expected", article_reference_test_data)
-def test__classify_with_ordinal(input, expected):
-    categorization = prompt_analysis(input)
+@pytest.mark.parametrize("query, expected", article_reference_test_data)
+def test__classify_with_ordinal(query, expected):
+    """
+    test__classify_with_ordinal
+    """
+    categorization = prompt_analysis(query)
     assert (
         categorization["ordinal"] == expected
     ), f"expected {expected}, got {categorization}"

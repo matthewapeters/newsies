@@ -154,7 +154,7 @@ def determine_action(query):
     return heuristics[classification]
 
 
-def news_sections(query) -> str:
+def news_section(query) -> str:
     """news_sections"""
     heuristics = {
         "front page": "",
@@ -212,12 +212,14 @@ def news_sections(query) -> str:
         "quirky": "oddities",
         "strange": "oddities",
     }
-    classification = categorize_text(
+    sections = categorize_text(
         query,
         list(heuristics.keys()),
     )
-    print(f"\nCLASSIFICATION: {classification}\n")
-    return list(set([heuristics[c] for c, _ in classification][:3]))
+    # we will only use the first section
+    section = sections[0][0]
+    print(f"\nCLASSIFICATION: {section}\n")
+    return heuristics[section]
 
 
 def target_class(query) -> str:
@@ -236,7 +238,7 @@ def prompt_analysis(query) -> str:
       - Analyze a prompt
     """
     target = target_class(query)
-    sections = news_sections(query)
+    section = news_section(query)
     quantity = determine_quantities(query)
     new_or_old = new_or_old_query(query)
     action = determine_action(query)
@@ -245,7 +247,7 @@ def prompt_analysis(query) -> str:
     return {
         "context": new_or_old,
         "target": target,
-        "sections": sections,
+        "section": section,
         "quantity": quantity,
         "ordinal": [ordinal_dict["number"], ordinal_dict["distance"]],
         "action": action,

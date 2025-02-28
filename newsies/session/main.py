@@ -61,7 +61,7 @@ class Turn:
         result_count = len(self.embedded_results["ids"][0])
         context = (
             f"{self.query_analysis["quantity"]} story[s] "
-            f"from sections: {', '.join(self.query_analysis["sections"])}\n"
+            f"from section: {self.query_analysis["section"]}\n"
         )
         for i in range(result_count):
             context += f"document {i}: {self.embedded_results['ids'][0][i]}\n"
@@ -99,7 +99,7 @@ class Turn:
         result_count = len(self.embedded_results["ids"][0])
         context = (
             f"{self.query_analysis["quantity"]} story[s] from "
-            f"sections: {",".join(self.query_analysis["sections"])}\n"
+            f"section: {self.query_analysis["section"]}\n"
         )
         for i in range(result_count):
             context += f"document {i}: {self.embedded_results['ids'][0][i]}\n"
@@ -172,7 +172,7 @@ class Turn:
         seen = []
         context = (
             f"{self.query_analysis["quantity"]} story[s] "
-            f"from sections:{",".join(self.query_analysis["sections"])}\n"
+            f"from section: {self.query_analysis["section"]}\n"
         )
         for i in range(result_count):
             headline = list(self._document_map[i].values())[0]
