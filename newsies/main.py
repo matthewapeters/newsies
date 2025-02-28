@@ -1,7 +1,7 @@
 import sys
 from typing import Dict
 
-from newsies.ap_news.document_structures import Document
+from newsies.document_structures import Document
 
 
 def usage():

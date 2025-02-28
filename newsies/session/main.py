@@ -193,7 +193,7 @@ class Session:
         self._llm: GPT4All = llm
         self._archivedb = archive_db
         self._sessiondb = ChromaDBClient()
-        self._sessiondb.collection = self.id
+        self._sessiondb.collection_name = self.id
         self._history = []
         self._context = {}
 

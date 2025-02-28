@@ -45,11 +45,12 @@ def embed_targets(target_map: dict):
     embed_targets
      - upsert targets as embeddings to ChromaDB
     """
-    tags_db.embed_documents(
-        document_ids=[k.replace(" ", "_") for k in target_map.keys()],
-        docs=[k for k in target_map.keys()],
-        metadata=[{"target": v} for v in target_map.values()],
-    )
+    # tags_db.embed_documents(
+    #    document_ids=[k.replace(" ", "_") for k in target_map.keys()],
+    #    docs=[k for k in target_map.keys()],
+    #    metadata=[{"target": v} for v in target_map.values()],
+    # )
+    pass
 
 
 # Ensure the tags database has at least the default tags

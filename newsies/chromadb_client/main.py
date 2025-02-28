@@ -10,7 +10,7 @@ from chromadb.config import Settings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
 
-from newsies.ap_news.document_structures import Document
+from newsies.document_structures import Document
 from newsies.targets import DOCUMENT
 
 # pylint: disable=broad-exception-raised, unused-argument

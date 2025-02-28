@@ -16,7 +16,7 @@ from bs4 import BeautifulSoup
 from newsies.chroma_client import CRMADB
 from newsies.summarizer import summarize_story
 from newsies.targets import DOCUMENT, SUMMARY, HEADLINE
-from .document_structures import Headline, Document
+from ..document_structures import Headline, Document
 
 
 # pylint: disable=unidiomatic-typecheck

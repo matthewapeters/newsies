@@ -5,7 +5,7 @@ from newsies.ap_news import (
     news_loader,
     news_summarizer,
 )
-from newsies.ap_news.document_structures import Document
+from newsies.document_structures import Document
 
 
 def test__get_news():

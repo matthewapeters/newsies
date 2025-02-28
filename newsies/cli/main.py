@@ -29,7 +29,7 @@ def select_collection(archive_date: str = None) -> ChromaDBClient:
     print(f"Reading {collection}\n")
     existing_collections = chromadb_client.client.list_collections()
     if collection in existing_collections:
-        chromadb_client.collection = collection
+        chromadb_client.collection_name = collection
         return chromadb_client
     else:
         print(f"collection {collection} does not exist ")
