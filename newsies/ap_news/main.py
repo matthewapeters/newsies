@@ -15,7 +15,7 @@ from bs4 import BeautifulSoup
 
 from newsies.chroma_client import CRMADB
 from newsies.summarizer import summarize_story
-from newsies.targets import DOCUMENT, SUMMARY
+from newsies.targets import DOCUMENT, SUMMARY, HEADLINE
 from .document_structures import Headline, Document
 
 
@@ -38,7 +38,7 @@ SECTIONS = [
 ]
 
 
-def get_latest_news() -> Dict[str:Document]:
+def get_latest_news() -> Dict[str, Document]:
     """
     get_latest_news
     """
@@ -73,8 +73,6 @@ def get_latest_news() -> Dict[str:Document]:
             headlines[f"{section}: {s.text}"] = Headline(
                 **{
                     "url": s.attrs["href"],
-                    "path": path(s.attrs["href"]),
-                    "source": "AP News",
                     "headline": s.text,
                     "section": section,
                 }
@@ -87,17 +85,21 @@ def get_latest_news() -> Dict[str:Document]:
         .replace("/", "_")
         .replace(" ", "_")
         .replace("-", "_")
-        .replace(".", "_"): {
-            "url": url,
-            "uri": path(url),
-            "date": datetime.now().strftime(r"%Y-%m-%d"),
-            "source": "AP News",
-            "target": DOCUMENT,
-            "headlines": list(set([k for k, v in headlines.items() if v.url == url])),
-            "sections": list(
-                set([v["section"] for v in headlines.values() if v.url == url])
-            ),
-        }
+        .replace(".", "_"): Document(
+            **{
+                "url": url,
+                "uri": path(url),
+                "date": datetime.now().strftime(r"%Y-%m-%d"),
+                "source": "AP News",
+                "target": DOCUMENT,
+                "headlines": list(
+                    set([k for k, v in headlines.items() if v.url == url])
+                ),
+                "sections": list(
+                    set([v.section for v in headlines.values() if v.url == url])
+                ),
+            }
+        )
         for url in urls
     }
 
@@ -204,7 +206,18 @@ def news_loader(documents: Dict[str, Document]):
     with Pool(processes=8) as ppool:
         ppool.map(
             download_article,
-            [(v.url, v, documents, v.sections) for v in documents.values()],
+            [(v.url, v.headlines, v.sections) for v in documents.values()],
         )
 
     CRMADB.add_documents(documents)
+
+    headlines: Dict[str, Document] = {}
+    for doc_id, doc in documents.items():
+        for headline_idx, headline in enumerate(doc.headlines):
+            h_doc = Document(**doc.dump())
+            h_doc.text = headline
+            h_doc.headlines = [headline]
+            h_doc.target = HEADLINE
+            headlines[f"{doc_id}_hl{headline_idx}"] = h_doc
+
+    CRMADB.add_documents(headlines)

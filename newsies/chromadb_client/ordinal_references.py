@@ -14,7 +14,7 @@ model = SentenceTransformer("all-MiniLM-L6-v2")
 
 p = inflect.engine()
 client = ChromaDBClient()
-client.collection = "ordinal_reference"
+client.collection_name = "ordinal_reference"
 # Define range of ordinal numbers to store (can be extended)
 ORDINAL_LIMIT = 1000
 

@@ -6,4 +6,4 @@ CRMADB = ChromaDBClient()
 CRMADB.language = "en"
 # collection can be changed per session
 COLLECTION = f"ap_news_{datetime.now().strftime(r'%Y-%m-%d')}"
-CRMADB.collection = COLLECTION
+CRMADB.collection_name = COLLECTION

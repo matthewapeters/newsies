@@ -9,7 +9,7 @@ from newsies.chromadb_client import find_ordinal, ChromaDBClient
 
 TAGS_COLLECTION = "newsies_tags"
 tags_db = ChromaDBClient()
-tags_db.collection = TAGS_COLLECTION
+tags_db.collection_name = TAGS_COLLECTION
 tags_db.language = "en"
 
 

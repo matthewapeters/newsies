@@ -13,16 +13,20 @@ class Headline:
     """
 
     url: str = None
-    uri: str = None
-    source: str = None
     headline: str = None
     section: str = None
 
     def __init__(self, *args, **kwargs):
         self.url = kwargs["url"]
-        self.uri = kwargs["uri"]
         self.headline = kwargs["headline"]
         self.section = kwargs["section"]
+
+    def dump(self) -> dict:
+        return {
+            "url": self.url,
+            "headline": self.headline,
+            "section": self.section,
+        }
 
 
 class Document:
