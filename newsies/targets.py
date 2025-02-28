@@ -1,3 +1,7 @@
+"""
+newsies.targets
+"""
+
 DOCUMENT = "DOCUMENT"
 HEADLINE = "HEADLINE"
 ENTITY = "ENTITY"

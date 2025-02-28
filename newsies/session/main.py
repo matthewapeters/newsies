@@ -9,7 +9,12 @@ from newsies.chromadb_client import ChromaDBClient
 from newsies.classify import prompt_analysis
 
 
+# pylint: disable=broad-exception-caught, protected-access, unnecessary-lambda
+
+
 class Turn:
+    """Turn"""
+
     def __init__(self, query: str, query_analysis: dict):
         self.query = query
         self.query_analysis = query_analysis
@@ -22,6 +27,7 @@ class Turn:
 
     @property
     def embedded_results(self):
+        """embedded_results"""
         return self._embedded_results
 
     @embedded_results.setter
@@ -30,6 +36,7 @@ class Turn:
 
     @property
     def summary_raw(self):
+        """summary_raw"""
         return self._summary_raw
 
     @summary_raw.setter
@@ -38,6 +45,7 @@ class Turn:
 
     @property
     def summaries(self):
+        """summaries"""
         return self._summaries
 
     @summaries.setter
@@ -47,9 +55,13 @@ class Turn:
     def synthesize(
         self, include_summaries: bool = True, include_uri: bool = True
     ) -> str:
+        """syntehsize"""
         context = ""
         result_count = len(self.embedded_results["ids"][0])
-        context = f"{self.query_analysis["quantity"]} story[s] from categies:{self.query_analysis["categories"]}\n"
+        context = (
+            f"{self.query_analysis["quantity"]} story[s] "
+            f"from categies:{self.query_analysis["categories"]}\n"
+        )
         for i in range(result_count):
             context += f"document {i}: {self.embedded_results['ids'][0][i]}\n"
             if include_uri:
@@ -80,9 +92,13 @@ class Turn:
             self.synthesize(include_summaries=False, include_uri=False)
 
     def read(self, include_summaries: bool = True, include_uri: bool = True) -> str:
+        """read"""
         context = ""
         result_count = len(self.embedded_results["ids"][0])
-        context = f"{self.query_analysis["quantity"]} story[s] from categies:{self.query_analysis["categories"]}\n"
+        context = (
+            f"{self.query_analysis["quantity"]} story[s] from "
+            f"categies:{self.query_analysis["categories"]}\n"
+        )
         for i in range(result_count):
             context += f"document {i}: {self.embedded_results['ids'][0][i]}\n"
             if include_uri:
@@ -130,14 +146,15 @@ class Turn:
             for u, hs in v.items():
                 # sort headlines by length
                 hs.sort(key=lambda x: len(x))
-            # only keep the shortest headline
-            # only keep one reference to the story
-            if hs[0] not in seen:
-                self._document_map[i] = {u: hs[0]}
-                seen.append(hs[0])
-                i += 1
+                # only keep the shortest headline
+                # only keep one reference to the story
+                if hs[0] not in seen:
+                    self._document_map[i] = {u: hs[0]}
+                    seen.append(hs[0])
+                    i += 1
 
     def list_headlines(self) -> str:
+        """list_headlines"""
         context = ""
         if len(self._document_map) == 0:
             self._prep_headline_maps()
@@ -146,7 +163,10 @@ class Turn:
 
         # we only want to see each headline once in the list
         seen = []
-        context = f"{self.query_analysis["quantity"]} story[s] from categies:{self.query_analysis["categories"]}\n"
+        context = (
+            f"{self.query_analysis["quantity"]} story[s] "
+            f"from categies:{self.query_analysis["categories"]}\n"
+        )
         for i in range(result_count):
             headline = list(self._document_map[i].values())[0]
             if headline not in seen:
@@ -162,6 +182,7 @@ class Turn:
         )
 
     def prompt(self) -> str:
+        """prompt"""
         match self.query_analysis["action"]:
             case "SUMMARIZE":
                 self.synthesize(True, True)
@@ -176,6 +197,7 @@ class Turn:
 
     @property
     def response(self):
+        """response"""
         return self._response
 
     @response.setter
@@ -198,17 +220,22 @@ class Session:
         self._context = {}
 
     def add(self, t: Turn):
+        """
+        add
+        """
         self._history.append(t)
 
     @property
     def context(self) -> dict:
+        """context"""
         return self._context
 
-    def query(self, query: str):
+    def query(self, query: str) -> str:
+        """query"""
         prompt = ""
         query_analysis = prompt_analysis(query)
         turn = Turn(query, query_analysis)
-        results = None
+        # results = None
         print(f"\n(newsies thinks you want to know about {query_analysis})\n")
 
         if query_analysis["context"] == "NEW":
@@ -257,3 +284,4 @@ class Session:
         turn.response = self._llm.generate(prompt)
         print("\nRESPONSE:\n", turn.response)
         self.add(turn)
+        return turn.response

@@ -1,19 +1,26 @@
-from newsies.chromadb_client import ChromaDBClient
-import torch
-import re
-from transformers import PegasusForConditionalGeneration, PegasusTokenizer
+"""
+newsies.summarizer
+"""
 
-device_str = f"cuda" if torch.cuda.is_available() else "cpu"
+import re
+
+from transformers import PegasusForConditionalGeneration, PegasusTokenizer
+import torch
+
+from newsies.chromadb_client import ChromaDBClient
+
+DEVICE_STR = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 # Load the Pegasus model and tokenizer
 # You can choose a different model based on your dataset (e.g., 'google/pegasus-large')
-model_name = "google/pegasus-large"
-model = PegasusForConditionalGeneration.from_pretrained(model_name).to(device_str)
-tokenizer = PegasusTokenizer.from_pretrained(model_name)
+MODEL_NAME = "google/pegasus-large"
+model = PegasusForConditionalGeneration.from_pretrained(MODEL_NAME).to(DEVICE_STR)
+tokenizer = PegasusTokenizer.from_pretrained(MODEL_NAME)
 
 
 def split_text(text, max_tokens=800, overlap=200):
+    """split_text"""
     tokens = tokenizer(text, return_tensors="pt", truncation=False)["input_ids"][0]
     chunks = []
     start = 0
@@ -26,8 +33,9 @@ def split_text(text, max_tokens=800, overlap=200):
 
 
 def summarize_chunk(chunk, max_length=200):
+    """summarize_chunck"""
     inputs = tokenizer(chunk, return_tensors="pt", max_length=1024, truncation=True).to(
-        device_str
+        DEVICE_STR
     )
     summary_ids = model.generate(
         **inputs, max_length=max_length
@@ -36,7 +44,8 @@ def summarize_chunk(chunk, max_length=200):
 
 
 def read_story(uri) -> str:
-    with open(uri, "r") as f:
+    """read_story"""
+    with open(uri, "r", encoding="utf8") as f:
         text = f.read()
     # remove AP credit tags for Video or photos (and related caption) , as they are not in the text
     # remove the AP legal at the end so it does not confuse the summary
@@ -58,13 +67,15 @@ def read_story(uri) -> str:
     return text
 
 
-def summarize_story(uri: str, CRMADB: ChromaDBClient, doc_id: str = None):
+def summarize_story(uri: str, chroma_client: ChromaDBClient, doc_id: str = None):
     """
     summarize_story:
       - Summarize a news article
     """
     if doc_id:
-        cached_summary = CRMADB.collection.get(include=["documents"], ids=[doc_id])
+        cached_summary = chroma_client.collection.get(
+            include=["documents"], ids=[doc_id]
+        )
         if cached_summary:
             return cached_summary["documents"][0]  # Return cached result
 

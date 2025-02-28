@@ -97,6 +97,7 @@ class ChromaDBClient:
 
     @property
     def collection(self) -> chromadb.Collection:
+        """collection"""
         return self._collection
 
     def _upsert(
@@ -190,7 +191,9 @@ class ChromaDBClient:
                 - date: The date of the document
                 - source: The source of the document
                 - headlines: A list of headlines for the document
-                - categories: A list of categories for the document
+                - sections: A list of sections from the news where the article was found
+                    - artciles may be found in multiple sections,
+                        including '' which is the front page
                 - text: The text of the document
                     - optionally overrides reading the document from the URI
         """
@@ -257,22 +260,32 @@ class ChromaDBClient:
             if query_analysis["target"] == "DOCUMENT"
             else query_analysis["target"]
         )
-        categories = query_analysis["categories"]
-        where_clause = {"type": {"$eq": query_type}}
-        match len(categories):
+        sections = query_analysis["sections"]
+        where_clause = {"target": {"$eq": query_type}}
+        match len(sections):
             case 0:
                 pass
             case 1:
                 where_clause = {
-                    "$and": [{"category0": {"$eq": categories[0]}}, where_clause]
+                    "$and": [
+                        {
+                            "$or": [
+                                {"section0": {"$eq": sections[0]}},
+                                {"section1": {"$eq": sections[0]}},
+                                {"section2": {"$eq": sections[0]}},
+                            ]
+                        },
+                        where_clause,
+                    ]
                 }
             case _:
                 where_clause = {
                     "$and": [
                         {
                             "$or": [
-                                {f"category{i}": {"$eq": categories[i]}}
-                                for i in range(len(categories))
+                                {f"section{j}": {"$eq": sections[i]}}
+                                for i in range(len(sections))
+                                for j in range(3)
                             ]
                         },
                         where_clause,

@@ -107,6 +107,7 @@ def get_latest_news() -> Dict[str, Document]:
 
 
 def path(story_url: str):
+    """path"""
     today = datetime.now().strftime(r"%Y%m%d")
     story = story_url.split("/")[-1].split("?")[0]
     os.makedirs(f"./daily_news/{today}", exist_ok=True)
@@ -125,9 +126,12 @@ def download_article(
 
     * if a file for the story already exists, return without doing anything
     * if too many retries have been attempted, return without doing anything
-    * As this method is commonly called in a process pool, we will sleep a short random time before initially trying to get the article
-    * If we get a 429 status code, we will sleep for a random time between 5 and 30 seconds before trying again
-        * On repeated 428 status code, the sleep will increase between the last backoff time and 30 seconds more
+    * As this method is commonly called in a process pool, we will sleep a
+        short random time before initially trying to get the article
+    * If we get a 429 status code, we will sleep for a random time between
+        5 and 30 seconds before trying again
+        * On repeated 428 status code, the sleep will increase between the
+            last backoff time and 30 seconds more
     * If we get a 200 status code, we will write the article to a file
 
     :param work: tuple

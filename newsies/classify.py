@@ -7,20 +7,22 @@ from transformers import pipeline
 
 from newsies.chromadb_client import find_ordinal, ChromaDBClient
 
+# pylint: disable=global-statement, fixme
+
 TAGS_COLLECTION = "newsies_tags"
 tags_db = ChromaDBClient()
 tags_db.collection_name = TAGS_COLLECTION
 tags_db.language = "en"
 
 
-device_str = (
+DEVICE_STR = (
     # f"cuda:{torch.cuda.get_device_name(0)}" if torch.cuda.is_available() else "cpu"
-    f"cuda"
+    "cuda"
     if torch.cuda.is_available()
     else "cpu"
 )
 categorizer = pipeline(
-    "zero-shot-classification", model="facebook/bart-large-mnli", device=device_str
+    "zero-shot-classification", model="facebook/bart-large-mnli", device=DEVICE_STR
 )
 
 
@@ -55,7 +57,6 @@ def embed_targets(target_map: dict):
     #    docs=[k for k in target_map.keys()],
     #    metadata=[{"target": v} for v in target_map.values()],
     # )
-    pass
 
 
 # Ensure the tags database has at least the default tags
@@ -84,18 +85,28 @@ def refresh_targets():
 # refresh_targets()
 
 
-# Function to classify text using zero-shot classification
 def categorize_text(text, labels):
+    """
+    categorize_text
+        Function to classify text using zero-shot classification
+    """
     result = categorizer(text, labels, multi_label=False)
     return [(k, v) for k, v in dict(zip(result["labels"], result["scores"])).items()]
 
 
 def determine_quantities(query):
+    """determine_quantities"""
     heuristics = {
         "referring to one story or article, story, person, place or thing": "ONE",
-        "referring to more than one, but less than all articles, stories, people, places or things": "MANY",
+        (
+            "referring to more than one, but less than all articles, "
+            "stories, people, places or things"
+        ): "MANY",
         "referring to all articles, stories, people, places or things": "ALL",
-        "request is for the full set of articles, stories, people, places or things from a category": "ALL",
+        (
+            "request is for the full set of articles, stories, people, "
+            "places or things from a category"
+        ): "ALL",
         "request if for each document from one or more categories": "ALL",
     }
     classification = categorize_text(query, list(heuristics.keys()))[0][0]
@@ -104,6 +115,10 @@ def determine_quantities(query):
 
 
 def new_or_old_query(query):
+    """
+    new_or_old_query
+        is the user asking for something new, or a reference to a prior query
+    """
     heuristics = {
         "refers to 'today'": "NEW",
         "refers to 'on this day'": "NEW",
@@ -118,6 +133,7 @@ def new_or_old_query(query):
 
 
 def determine_action(query):
+    """determine_action"""
     heuristics = {
         "read an article": "READ",
         "pull an article": "READ",
@@ -136,8 +152,11 @@ def determine_action(query):
     return heuristics[classification]
 
 
-def news_categories(query) -> str:
+def news_sections(query) -> str:
+    """news_sections"""
     heuristics = {
+        "front page": "",
+        "top story": "",
         "global news": "world-news",
         "world news": "world-news",
         "international news": "world-news",
@@ -164,7 +183,6 @@ def news_categories(query) -> str:
         "biology": "science",
         "health": "health",
         "medical": "health",
-        "health": "health",
         "well being": "",
         "entertainment": "entertainment",
         "actor": "entertainment",
@@ -197,12 +215,17 @@ def news_categories(query) -> str:
         list(heuristics.keys()),
     )
     print(f"\nCLASSIFICATION: {classification}\n")
-    return [heuristics[c] for c, _ in classification][:3]
+    return list(set([heuristics[c] for c, _ in classification][:3]))
 
 
 def target_class(query) -> str:
-    target_class = categorize_text(query, list(TARGET_MAP.keys()))[0]
-    return TARGET_MAP[target_class[0]]
+    """
+    target_class
+
+    Is the user looking for a DOCUMNET or a HEADLINE
+    """
+    detected_target = categorize_text(query, list(TARGET_MAP.keys()))[0]
+    return TARGET_MAP[detected_target[0]]
 
 
 def prompt_analysis(query) -> str:
@@ -211,7 +234,7 @@ def prompt_analysis(query) -> str:
       - Analyze a prompt
     """
     target = target_class(query)
-    categories = news_categories(query)
+    sections = news_sections(query)
     quantity = determine_quantities(query)
     new_or_old = new_or_old_query(query)
     action = determine_action(query)
@@ -220,7 +243,7 @@ def prompt_analysis(query) -> str:
     return {
         "context": new_or_old,
         "target": target,
-        "categories": categories,
+        "sections": sections,
         "quantity": quantity,
         "ordinal": [ordinal_dict["number"], ordinal_dict["distance"]],
         "action": action,
