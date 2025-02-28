@@ -24,20 +24,23 @@ categorizer = pipeline(
 )
 
 
-target_MAP = {}
 _default_targets = {
-    "detailed news story": "DOCUMENT",
-    "read an article": "DOCUMENT",
+    "story": "DOCUMENT",
+    "stories": "DOCUMENT",
+    "article": "DOCUMENT",
+    "articles": "DOCUMENT",
+    "details news story": "DOCUMENT",
+    "read story": "DOCUMENT",
+    "read article": "DOCUMENT",
     "any news stories": "DOCUMENT",
-    "statistical summary of multiple news stories": "DOCUMENT",
-    "common narrative targets in multiple stories": "DOCUMENT",
-    "list headlines about a common person, place, or thing": "HEADLINE",
-    "list headlines from all stories or from a category of stories": "HEADLINE",
-    "common targets in multiple headlines": "HEADLINE",
-    "staticical summary of multiple headlines": "HEADLINE",
-    "people, places, things in news stories": "ENTITY",
-    "people, places, things in headlines": "ENTITY",
+    "headline": "HEADLINE",
+    "title": "HEADLINE",
+    "headlines": "HEADLINE",
+    "titles": "HEADLINE",
+    "list headlines": "HEADLINE",
+    "list titles": "HEADLINE",
 }
+TARGET_MAP = {}
 
 
 def embed_targets(target_map: dict):
@@ -45,6 +48,8 @@ def embed_targets(target_map: dict):
     embed_targets
      - upsert targets as embeddings to ChromaDB
     """
+    global TARGET_MAP
+    TARGET_MAP = target_map
     # tags_db.embed_documents(
     #    document_ids=[k.replace(" ", "_") for k in target_map.keys()],
     #    docs=[k for k in target_map.keys()],
@@ -67,15 +72,16 @@ def refresh_targets():
     """
     _all_targets = tags_db.collection.get()
     _target_count = len(_all_targets["documents"])
-    global target_MAP
+    global TARGET_MAP
 
-    target_MAP = {
+    TARGET_MAP = {
         _all_targets["documents"][i]: _all_targets["metadatas"][i]["target"]
         for i in range(_target_count)
     }
 
 
-refresh_targets()
+# TODO - uncomment when we want to retrieve the mappings from the chromadb
+# refresh_targets()
 
 
 # Function to classify text using zero-shot classification
@@ -114,12 +120,16 @@ def new_or_old_query(query):
 def determine_action(query):
     heuristics = {
         "read an article": "READ",
-        "list one or more titles": "LIST-HEADLINE",
-        "list one or more headlines": "LIST-HEADLINE",
-        "enumerate or list stories": "LIST-HEADLINE",
+        "pull an article": "READ",
+        "read a story": "READ",
+        "pull a story": "READ",
+        "list titles": "LIST",
+        "list headlines": "LIST",
+        "list stories": "LIST",
+        "list articles": "LIST",
         "count articles": "COUNT",
-        "summarize multiple articles together": "SYNTHESIZE",
-        "summarize a single article": "SUMMARIZE",
+        "summary of an article": "SUMMARY",
+        "summary of a story": "SUMMARY",
     }
     classification = categorize_text(query, list(heuristics.keys()))[0][0]
     print(f"\nACTION: {classification}\n")
@@ -143,18 +153,28 @@ def news_categories(query) -> str:
         "corporate": "business",
         "business": "business",
         "technology": "technology",
-        "science": "technology",
-        "space": "technology",
-        "nasa": "technology",
-        "robotics": "science",
+        "robotics": "technology",
+        "computers": "technology",
+        "ai": "technology",
+        "nasa": "science",
+        "space": "science",
+        "science": "science",
+        "research": "science",
         "physics": "science",
         "biology": "science",
-        "research": "science",
         "health": "health",
         "medical": "health",
         "health": "health",
+        "well being": "",
         "entertainment": "entertainment",
         "actor": "entertainment",
+        "oscars": "entertainment",
+        "emmy": "entertainment",
+        "cma": "entertainment",
+        "music": "entertainment",
+        "podcast": "entertainment",
+        "media": "entertainment",
+        "literature": "entertainment",
         "film": "entertainment",
         "broadway": "entertainment",
         "sports": "sports",
@@ -181,8 +201,8 @@ def news_categories(query) -> str:
 
 
 def target_class(query) -> str:
-    target_class = categorize_text(query, list(target_MAP.keys()))[0]
-    return target_MAP[target_class]
+    target_class = categorize_text(query, list(TARGET_MAP.keys()))[0]
+    return TARGET_MAP[target_class[0]]
 
 
 def prompt_analysis(query) -> str:

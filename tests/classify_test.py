@@ -1,7 +1,7 @@
 import pytest
 
 
-from newsies.classify import prompt_analysis, categorize_text, target_MAP
+from newsies.classify import prompt_analysis, categorize_text, TARGET_MAP
 
 target_class_test_data = [
     (
@@ -43,7 +43,7 @@ def test__list_science_headlines():
     assert intent["target"] == "HEADLINE"
     assert intent["categories"][0] == "science"
     assert intent["quantity"] == "ALL"
-    assert intent["action"] == "LIST-HEADLINE"
+    assert intent["action"] == "LIST"
 
     query = "what is the most common targets from the list of headlines in the last prompt, ordered by the number of stories"
     intent = prompt_analysis(query)
@@ -51,7 +51,7 @@ def test__list_science_headlines():
     assert intent["target"] == "HEADLINE"
     # assert intent["categories"][0] == "science"
     assert intent["quantity"] == "ALL"
-    assert intent["action"] == "LIST-HEADLINE"
+    assert intent["action"] == "LIST"
 
 
 def test_categories():
@@ -71,7 +71,7 @@ def test_categories():
     query = "list the headlines from each of the articles in today's science section"
 
     target_classification = categorize_text(
-        query, list(target_MAP.keys()), threshold=None
+        query, list(TARGET_MAP.keys()), threshold=None
     )[:1]
     assert len(target_classification) == 1
 
