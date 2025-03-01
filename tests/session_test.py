@@ -31,6 +31,14 @@ def test__list_all_science_headlines():
     response = s.query(query)
     assert response
 
+    query = "read the second article from the previous query."
+    response = s.query(query)
+    assert response
+
+    query = "read the summary of the third article from the previous query."
+    response = s.query(query)
+    assert response
+
 
 if __name__ == "__main__":
     test__list_all_science_headlines()

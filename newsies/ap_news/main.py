@@ -196,10 +196,10 @@ def news_summarizer(documents: Dict[str, Document]):
         print(f"Summarized: {k}")
         CRMADB.add_documents({doc_id: metadata})
 
-    with ThreadPoolExecutor(
-        max_workers=4
-    ) as executor:  # Adjust max_workers based on CPU
-        executor.map(lambda kv: process_story(*kv), documents.items())
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [executor.submit(process_story, k, v) for k, v in documents.items()]
+        for future in futures:
+            future.result()  # Ensures all tasks complete before exiting
 
 
 def news_loader(documents: Dict[str, Document]):

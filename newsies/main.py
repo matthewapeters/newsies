@@ -1,3 +1,7 @@
+"""
+newsies.main
+"""
+
 import sys
 from typing import Dict
 

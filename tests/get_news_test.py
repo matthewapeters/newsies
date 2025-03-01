@@ -1,3 +1,7 @@
+"""
+tests.get_news_test
+"""
+
 from typing import Dict
 
 from newsies.ap_news import (
@@ -9,7 +13,9 @@ from newsies.document_structures import Document
 
 
 def test__get_news():
-    """ """
+    """
+    test__get_news
+    """
 
     headlines: Dict[str, Document] = get_latest_news()
     news_loader(headlines)

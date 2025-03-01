@@ -1,3 +1,7 @@
+"""
+tests.ordinal_reference_test
+"""
+
 import pytest
 
 from newsies.chromadb_client import find_ordinal
@@ -9,9 +13,9 @@ test_data = [
 ]
 
 
-@pytest.mark.parametrize("input, expected", test_data)
-def test__find_ordinal(input, expected):
-    ordinals = find_ordinal(input)
+@pytest.mark.parametrize("inputs, expected", test_data)
+def test__find_ordinal(inputs, expected):
+    ordinals = find_ordinal(inputs)
     assert ordinals is not None, "expected to find a result, got None"
     assert (
         expected == ordinals["number"]
