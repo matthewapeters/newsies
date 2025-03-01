@@ -131,6 +131,7 @@ integers = {
 
 
 def make_numeric_ordinal(nbr: int) -> str:
+    """make_numeric_ordinal"""
     suffix: str = oridnal_suffix[nbr % 10]
     return f"{nbr}{suffix}"
 
