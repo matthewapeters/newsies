@@ -73,7 +73,7 @@ def get_latest_news() -> Dict[str, Document]:
             headlines[f"{section}: {s.text}"] = Headline(
                 **{
                     "url": s.attrs["href"],
-                    HEADLINE: s.text,
+                    "headline": s.text,
                     "section": section,
                 }
             )
@@ -93,7 +93,7 @@ def get_latest_news() -> Dict[str, Document]:
                 "source": "AP News",
                 "target": DOCUMENT,
                 "headlines": list(
-                    set([k for k, v in headlines.items() if v.url == url])
+                    set([v.headline for v in headlines.values() if v.url == url])
                 ),
                 "sections": list(
                     set([v.section for v in headlines.values() if v.url == url])

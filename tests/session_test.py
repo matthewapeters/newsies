@@ -16,9 +16,21 @@ def test__list_all_science_headlines():
     db = ChromaDBClient()
     db.collection_name = "ap_news_2025-02-28"
     s = Session(llm, db)
-    query = "list the headlines from each of the articles in today's science section"
+    query = (
+        "list only the headlines from each of the articles in today's science section."
+    )
     response = s.query(query)
     assert response
     query = (
-        "what is the most common theme from the list of headlines in the last prompt"
+        "given the list of headlines from the last prompt, "
+        "determine up to three common themes and list each headline under its theme."
+        "Do not explain your thinking. only respond with JSON. "
+        'Example: {"brief theme description": '
+        '["a headline related to this theme", "another headline related to this theme"]}'
     )
+    response = s.query(query)
+    assert response
+
+
+if __name__ == "__main__":
+    test__list_all_science_headlines()
