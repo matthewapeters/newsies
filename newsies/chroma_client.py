@@ -1,6 +1,9 @@
+"""
+newsies.chroma_client
+"""
+
 from datetime import datetime
 from newsies.chromadb_client import ChromaDBClient
-from newsies.classify import TAGS_COLLECTION
 
 CRMADB = ChromaDBClient()
 CRMADB.language = "en"

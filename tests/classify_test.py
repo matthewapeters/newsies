@@ -2,15 +2,17 @@
 tests.classify_test
 """
 
+from typing import Dict
 import pytest
+
 
 from newsies.targets import DOCUMENT, HEADLINE
 from newsies.actions import LIST
 from newsies.classify import (
     prompt_analysis,
     categorize_text,
-    TARGET_MAP,
-    news_section,
+    #    TARGET_HEURISTICS,
+    NEWS_SECTION_HEURISTICS,
 )
 
 # pylint: disable=broad-exception-caught, unused-variable
@@ -72,25 +74,29 @@ def test__list_science_headlines():
     assert intent["action"] == LIST
 
 
-def test__sections():
-    """test__sections"""
-    query = "list the headlines from each of the articles in today's science section"
+news_sections_testdata = [
+    (
+        "list the headlines from each of the articles in today's science section",
+        "science",
+    ),
+    (
+        "list the headlines from each of the articles in today's us news section",
+        "us-news",
+    ),
+    ("any news from Africa today?", "world-news"),
+]
 
-    target_classification = categorize_text(query, list(TARGET_MAP.keys()))[:1]
-    assert len(target_classification) == 1
 
-    categories = news_section(query)
-    assert len(categories) == 1
-    assert categories[0] == "science"
+@pytest.mark.parametrize("query,section", news_sections_testdata)
+def test__news_sections(query, section):
+    """test__news_sections"""
+    keys = list(NEWS_SECTION_HEURISTICS.keys())
 
-    query = (
-        "what is the most common targets from the list of headlines "
-        "in the last prompt, ordered by the number of stories"
+    section_class: Dict[str, float] = categorize_text(query, [keys])
+    assert section == NEWS_SECTION_HEURISTICS[section_class[keys[0]]], (
+        f"expected {section}, got {section_class[keys[0]]} -> "
+        f"{NEWS_SECTION_HEURISTICS[section_class[keys[0]]]}"
     )
-    categories = news_section(
-        query,
-    )[:3]
-    assert len(categories) == 0
 
 
 article_reference_test_data = [

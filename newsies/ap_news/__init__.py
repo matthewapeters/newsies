@@ -4,4 +4,5 @@ from .main import (
     get_latest_news,
     news_loader,
     news_summarizer,
+    batch_news_summarizer,
 )

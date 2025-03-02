@@ -9,6 +9,7 @@ from datetime import datetime
 from multiprocessing import Pool
 from random import randint
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 
 import requests
 from bs4 import BeautifulSoup
@@ -197,6 +198,28 @@ def news_summarizer(documents: Dict[str, Document]):
         CRMADB.add_documents({doc_id: metadata})
 
     with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [executor.submit(process_story, k, v) for k, v in documents.items()]
+        for future in futures:
+            future.result()  # Ensures all tasks complete before exiting
+
+
+def batch_news_summarizer(documents: Dict[str, Document]):
+    """
+    news_summarizer
+    Summarizes multiple news articles concurrently using ProcessPoolExecutor.
+    """
+
+    def process_story(k: str, v: Document):
+        doc_id = k + "_summary"
+        metadata = Document(**v.dump())
+        metadata.text = summarize_story(v.uri, CRMADB, doc_id)
+        metadata.target = "SUMMARY"
+        print(f"Summarized: {k}")
+        CRMADB.add_documents({doc_id: metadata})
+
+    with ProcessPoolExecutor(
+        max_workers=4
+    ) as executor:  # Use multiprocessing for efficiency
         futures = [executor.submit(process_story, k, v) for k, v in documents.items()]
         for future in futures:
             future.result()  # Ensures all tasks complete before exiting

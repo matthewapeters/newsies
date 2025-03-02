@@ -6,7 +6,7 @@ from typing import Dict, List
 import torch
 from transformers import pipeline
 from newsies.chromadb_client import find_ordinal
-from newsies.classification_heuristics import (
+from newsies.classify.classification_heuristics import (
     ACTION_HEURISTICS,
     TARGET_HEURISTICS,
     ONE_MANY_ALL_HEURISTICS,

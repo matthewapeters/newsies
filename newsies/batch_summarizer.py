@@ -1,21 +1,19 @@
 """
-newsies.summarizer
+newsies.batch_summarizer
 """
 
 import re
 from typing import List
-
-#
 
 from transformers import PegasusForConditionalGeneration, PegasusTokenizer
 import torch
 
 from newsies.chromadb_client import ChromaDBClient
 
+
 DEVICE_STR = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Load the Pegasus model and tokenizer
-# You can choose a different model based on your dataset (e.g., 'google/pegasus-large')
 MODEL_NAME = "google/pegasus-large"
 model = PegasusForConditionalGeneration.from_pretrained(MODEL_NAME).to(DEVICE_STR)
 tokenizer = PegasusTokenizer.from_pretrained(MODEL_NAME)
@@ -24,7 +22,7 @@ tokenizer = PegasusTokenizer.from_pretrained(MODEL_NAME)
 def split_text(text, max_tokens=800, overlap=200):
     """
     split_text
-    """
+    Splits text into overlapping chunks."""
     tokens = tokenizer(text, return_tensors="pt", truncation=False)["input_ids"][0]
     chunks = []
     start = 0
@@ -36,34 +34,36 @@ def split_text(text, max_tokens=800, overlap=200):
     return [tokenizer.decode(chunk, skip_special_tokens=True) for chunk in chunks]
 
 
-def summarize_chunk(chunk, max_length=200):
+def batch_summarize(chunks: List[str], max_length=200, batch_size=4):
     """
-    summarize_chunk
-
+    batch_summarize
+    Summarizes multiple text chunks at once for efficiency.
     """
-    inputs = tokenizer(chunk, return_tensors="pt", max_length=1024, truncation=True).to(
-        DEVICE_STR
-    )
-    summary_ids = model.generate(
-        **inputs, max_length=max_length
-    )  # Output summary length limit
-    return tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+    summaries = []
+    for i in range(0, len(chunks), batch_size):
+        batch = chunks[i : i + batch_size]
+        inputs = tokenizer(
+            batch, return_tensors="pt", truncation=True, padding=True
+        ).to(DEVICE_STR)
+        with torch.no_grad():
+            summary_ids = model.generate(**inputs, max_length=max_length)
+        summaries.extend(tokenizer.batch_decode(summary_ids, skip_special_tokens=True))
+    return summaries
 
 
 def read_story(uri) -> str:
-    """read_story"""
+    """Reads and preprocesses a story from a file."""
     with open(uri, "r", encoding="utf8") as f:
         text = f.read()
-    # remove AP credit tags for Video or photos (and related caption) , as they are not in the text
-    # remove the AP legal at the end so it does not confuse the summary
+
+    # Remove unwanted tags, AP legal text, and excessive line breaks
     text = re.sub(
         r".*\(AP \w*\/\w* \w*\)|The Associated Press.*$|.*AP is solely responsible.*$|\n{2,}",
         "\n",
         text,
-    )
-    text = text.replace("\n\n", "\n")
-    # remove quotes and capitalization so we get a more balanced summary of the story
-    # quotes tend to super-cede other ideas in the story
+    ).replace("\n\n", "\n")
+
+    # Normalize quotes and capitalization for balanced summaries
     text = (
         text.replace('"', "")
         .replace("”", "")
@@ -76,8 +76,8 @@ def read_story(uri) -> str:
 
 def summarize_story(uri: str, chroma_client: ChromaDBClient, doc_id: str = None):
     """
-    summarize_story:
-      - Summarize a news article
+    summarize_story
+    Summarizes a news article, using cached summaries if available.
     """
     if doc_id:
         cached_summary = chroma_client.collection.get(
@@ -88,14 +88,15 @@ def summarize_story(uri: str, chroma_client: ChromaDBClient, doc_id: str = None)
 
     text = read_story(uri)
 
-    # summarize each paragraph
+    # Split text into chunks for batch processing
     document_chunks = [c for p in text.split("\n") if len(p) > 1 for c in split_text(p)]
-    summaries = [summarize_chunk(chunk, len(chunk) / 2) for chunk in document_chunks]
+
+    # Batch summarize chunks
+    summaries = batch_summarize(document_chunks, max_length=200, batch_size=4)
     merged_summary = " ".join(summaries)
 
-    # summarize the summaries (by chunks)
+    # Further summarize if needed
     document_chunks = split_text(merged_summary, max_tokens=800)
-    summaries = [summarize_chunk(chunk) for chunk in document_chunks]
-    summary = " ".join(summaries)
+    summary = " ".join(batch_summarize(document_chunks, max_length=200, batch_size=4))
 
     return summary

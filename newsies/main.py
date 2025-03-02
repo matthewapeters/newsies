@@ -9,6 +9,7 @@ from newsies.document_structures import Document
 
 
 def usage():
+    """usage"""
     print(
         """
 
@@ -41,12 +42,12 @@ if __name__ == "__main__":
                 from newsies.ap_news import (
                     get_latest_news,
                     news_loader,
-                    news_summarizer,
+                    batch_news_summarizer,
                 )
 
                 headlines: Dict[str, Document] = get_latest_news()
                 news_loader(headlines)
-                news_summarizer(headlines)
+                batch_news_summarizer(headlines)
             case "serve":
                 pass
             case "cli":
