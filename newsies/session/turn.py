@@ -148,7 +148,7 @@ class Turn:
                     self._paged_document_map[self.current_page][doc_map_idx].keys()
                 )[0]
                 if self.target_type != target:
-                    self.response = archivedb.get(ids=[], where={})
+                    self.response = archivedb.collection.get(ids=[], where={})
                     return
                 else:
                     pass

@@ -2,11 +2,10 @@
 newsies.classify
 """
 
-from typing import List
+from typing import Dict, List
 import torch
 from transformers import pipeline
-
-from newsies.chromadb_client import find_ordinal, ChromaDBClient
+from newsies.chromadb_client import find_ordinal
 from newsies.classification_heuristics import (
     ACTION_HEURISTICS,
     TARGET_HEURISTICS,
@@ -14,13 +13,6 @@ from newsies.classification_heuristics import (
     NEWS_SECTION_HEURISTICS,
     QUERY_OR_REFERENCE_HEURISTICS,
 )
-
-# pylint: disable=global-statement, fixme
-
-TAGS_COLLECTION = "newsies_tags"
-tags_db = ChromaDBClient()
-tags_db.collection_name = TAGS_COLLECTION
-tags_db.language = "en"
 
 
 DEVICE_STR = (
@@ -34,53 +26,22 @@ categorizer = pipeline(
 )
 
 
-def embed_targets(target_map: dict):
+def categorize_text(text, label_sets: List[str]) -> Dict[str, float]:
     """
-    embed_targets
-     - upsert targets as embeddings to ChromaDB
+    categorize_text:
+        Classifies a single text against multiple label sets in one call.
     """
-    global TARGET_MAP
-    TARGET_MAP = target_map
-    # tags_db.embed_documents(
-    #    document_ids=[k.replace(" ", "_") for k in target_map.keys()],
-    #    docs=[k for k in target_map.keys()],
-    #    metadata=[{"target": v} for v in target_map.values()],
-    # )
+    results = categorizer(text, sum(label_sets, []), multi_label=False)
 
+    # Group results back into original categories
+    label_scores = dict(zip(results["labels"], results["scores"]))
 
-# Ensure the tags database has at least the default tags
-embed_targets(_default_targets)
+    classified = {}
+    for label_set in label_sets:
+        best_label = max(label_set, key=lambda label: label_scores.get(label, 0))
+        classified[label_set[0]] = best_label  # Assign category by first label set key
 
-
-def refresh_targets():
-    """
-    refresh_targets
-     - load all of the targets from the ChromaDB collection
-
-     These can be updated over time to identify preferred classifications.  As these
-     are used in prompts analysis, they can customize retrieval based on user idioms
-    """
-    _all_targets = tags_db.collection.get()
-    _target_count = len(_all_targets["documents"])
-    global TARGET_MAP
-
-    TARGET_MAP = {
-        _all_targets["documents"][i]: _all_targets["metadatas"][i]["target"]
-        for i in range(_target_count)
-    }
-
-
-# TODO - uncomment when we want to retrieve the mappings from the chromadb
-# refresh_targets()
-
-
-def categorize_text(text, labels: List[List[str]]):
-    """
-    categorize_text
-        Function to classify text using zero-shot classification
-    """
-    result = categorizer(text, labels, multi_label=False)
-    return [(k, v) for k, v in dict(zip(result["labels"], result["scores"])).items()]
+    return classified
 
 
 def prompt_analysis(query) -> str:
@@ -100,10 +61,10 @@ def prompt_analysis(query) -> str:
 
     classified_results = categorize_text(query, label_sets)
     return {
-        "context": QUERY_OR_REFERENCE_HEURISTICS[classified_results[label_sets[0]]],
-        "target": TARGET_HEURISTICS[classified_results[label_sets[1]]],
-        "section": NEWS_SECTION_HEURISTICS[classified_results[label_sets[2]]],
-        "quantity": ONE_MANY_ALL_HEURISTICS[classified_results[label_sets[3]]],
-        "action": ACTION_HEURISTICS[classified_results[label_sets[4]]],
+        "context": QUERY_OR_REFERENCE_HEURISTICS[classified_results[label_sets[0][0]]],
+        "target": TARGET_HEURISTICS[classified_results[label_sets[1][0]]],
+        "section": NEWS_SECTION_HEURISTICS[classified_results[label_sets[2][0]]],
+        "quantity": ONE_MANY_ALL_HEURISTICS[classified_results[label_sets[3][0]]],
+        "action": ACTION_HEURISTICS[classified_results[label_sets[4][0]]],
         "ordinal": [ordinal_dict["number"], ordinal_dict["distance"]],
     }

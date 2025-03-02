@@ -14,7 +14,7 @@ def test__list_all_science_headlines():
         and then analyze them for common themes
     """
     db = ChromaDBClient()
-    db.collection_name = "ap_news_2025-02-28"
+    db.collection_name = "ap_news_2025-03-01"
     s = Session(llm, db)
     query = (
         "list only the headlines from each of the articles in today's science section."

@@ -2,9 +2,13 @@
 newsies.classification_heuristics
 """
 
-from newsies.targets import DOCUMENT, HEADLINE, PAGE, SUMMARY
 from newsies.actions import READ, LIST, COUNT  # , SYNTHESIZE
+from newsies.targets import DOCUMENT, HEADLINE, PAGE, SUMMARY
+from newsies.chromadb_client import ChromaDBClient
 
+# pylint: disable=global-statement, unused-argument, fixme
+
+TAGS_COLLECTION = "newsies_tags"
 
 NEWS_SECTION_HEURISTICS = {
     "front page": "",
@@ -124,3 +128,51 @@ ONE_MANY_ALL_HEURISTICS = {
     ): "ALL",
     "request if for each document from one or more categories": "ALL",
 }
+
+
+def embed_targets(target_map: dict):
+    """
+    embed_targets
+     - upsert targets as embeddings to ChromaDB
+    """
+    # global TARGET_HEURISTICS
+    # TARGET_HEURISTICS = target_map
+    #
+    # tags_db = ChromaDBClient()
+    # TAGS_COLLECTION = "newsies_tags"
+    # tags_db.collection_name = TAGS_COLLECTION
+    # tags_db.language = "en"
+    # tags_db.embed_documents(
+    #    document_ids=[k.replace(" ", "_") for k in target_map.keys()],
+    #    docs=[k for k in target_map.keys()],
+    #    metadata=[{"target": v} for v in target_map.values()],
+    # )
+
+
+def refresh_targets():
+    """
+    refresh_targets
+     - load all of the targets from the ChromaDB collection
+
+     These can be updated over time to identify preferred classifications.  As these
+     are used in prompts analysis, they can customize retrieval based on user idioms
+    """
+
+    #
+    tags_db = ChromaDBClient()
+    tags_db.collection_name = TAGS_COLLECTION
+    tags_db.language = "en"
+    all_targets = tags_db.collection.get()
+    target_count = len(all_targets["documents"])
+    global TARGET_HEURISTICS
+
+    TARGET_HEURISTICS = {
+        all_targets["documents"][i]: all_targets["metadatas"][i]["target"]
+        for i in range(target_count)
+    }
+
+
+# TODO - uncomment when we want to retrieve the mappings from the chromadb
+# Ensure the tags database has at least the default tags
+# embed_targets(TARGET_HEURISTICS)
+# refresh_targets()
