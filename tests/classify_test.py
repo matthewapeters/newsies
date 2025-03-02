@@ -6,7 +6,7 @@ from typing import Dict
 import pytest
 
 
-from newsies.targets import DOCUMENT, HEADLINE
+from newsies.targets import DOCUMENT, HEADLINE, SUMMARY, ENTITY
 from newsies.actions import LIST
 from newsies.classify import (
     prompt_analysis,
@@ -20,7 +20,7 @@ from newsies.classify import (
 target_class_test_data = [
     (
         "Who are the key players in the current rift between the US and Canada?",
-        "ENTITY",
+        ENTITY,
     ),
     ("Are there any new stories about actor Kevin Kline?", DOCUMENT),
     ("What are the common themes in all of the news stories today?", DOCUMENT),
@@ -30,6 +30,8 @@ target_class_test_data = [
     ),
     ("list the first five headlines from the science section", HEADLINE),
     ("how many headlines in the oditties secion today?", HEADLINE),
+    ("get the summaries of each of last three articles", SUMMARY),
+    ("read the summary of the first story in the list", SUMMARY),
 ]
 
 
@@ -42,12 +44,14 @@ def test__target_class(query, expected):
     analysis = prompt_analysis(query)
     try:
         assert analysis
-        assert "target" in analysis, f"Expected 'target' in analysis, got {analysis}"
+        assert (
+            "target" in analysis
+        ), f"Expected 'target' in analysis, got {list(analysis.keys())}"
         assert (
             expected == analysis["target"]
         ), f"expected target to be {expected}, got {analysis['target']}"
     except Exception as e:
-        assert False, "ERROR: {e} not expected.  Got {analysis}"
+        assert False, f"ERROR: {e} not expected.  Got {analysis}"
 
 
 def test__list_science_headlines():
@@ -84,6 +88,12 @@ news_sections_testdata = [
         "us-news",
     ),
     ("any news from Africa today?", "world-news"),
+    ("any news from Canada today?", "world-news"),
+    ("any news from Asia today?", "world-news"),
+    ("any robotics news today?", "technology"),
+    ("what  is the president up to today?", "politics"),
+    ("did that bill pass in the sentate?", "politics"),
+    ("any new scandals in the congress?", "politics"),
 ]
 
 

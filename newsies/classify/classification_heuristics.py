@@ -3,7 +3,7 @@ newsies.classification_heuristics
 """
 
 from newsies.actions import READ, LIST, COUNT  # , SYNTHESIZE
-from newsies.targets import DOCUMENT, HEADLINE, PAGE, SUMMARY
+from newsies.targets import DOCUMENT, HEADLINE, PAGE, SUMMARY, ENTITY
 from newsies.chromadb_client import ChromaDBClient
 
 # pylint: disable=global-statement, unused-argument, fixme
@@ -37,9 +37,14 @@ NEWS_SECTION_HEURISTICS = {
     "state": "us-news",
     "us news": "us-news",
     "congress": "politics",
+    "representative": "politics",
+    "senator": "politics",
     "president": "politics",
     "senate": "politics",
     "supreme court": "politics",
+    "bill": "politics",
+    "resolution": "politics",
+    "executive action": "politics",
     "stock market": "business",
     "corporate": "business",
     "business": "business",
@@ -102,9 +107,26 @@ TARGET_HEURISTICS = {
     "read summary of story": SUMMARY,
     "the summary of article": SUMMARY,
     "the summary of story": SUMMARY,
+    "read summaries of articles": SUMMARY,
+    "read summaries of stories": SUMMARY,
+    "the summaries of articles": SUMMARY,
+    "the summaries of stories": SUMMARY,
     "page": PAGE,
+    "pages": PAGE,
     "next page": PAGE,
     "previous page": PAGE,
+    "person": ENTITY,
+    "people": ENTITY,
+    "player": ENTITY,
+    "players": ENTITY,
+    "place": ENTITY,
+    "places": ENTITY,
+    "country": ENTITY,
+    "countries": ENTITY,
+    "city": ENTITY,
+    "cities": ENTITY,
+    "organization": ENTITY,
+    "company": ENTITY,
 }
 
 
