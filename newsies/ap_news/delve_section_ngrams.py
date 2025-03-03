@@ -4,12 +4,12 @@ newsies.classify.train
 
 import math
 import re
+from typing import List
 from collections import Counter
 from transformers import AutoTokenizer
 from nltk.util import ngrams
 from nltk.corpus import stopwords
 import nltk
-from typing import List
 
 from newsies.ap_news import SECTIONS
 from newsies.chroma_client import CRMADB
@@ -46,7 +46,7 @@ def analyze_ngrams_per_section(headlines):
       - read each of the news stories
     """
     v: Document = None
-    for k, v in headlines.items():
+    for v in headlines.values():
         with open(v.uri, "r", encoding="utf8") as fh:
             text = fh.read()
         store_keywords_in_chromadb(story=text, sections=v.sections)
