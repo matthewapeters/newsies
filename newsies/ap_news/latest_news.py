@@ -1,42 +1,35 @@
 """
-newsies.ap_news.main
+newsies.ap_news.latest_news
 """
 
-import os
-import time
-from typing import Dict
 from datetime import datetime
-from multiprocessing import Pool
+import time
+import os
+from typing import Dict
 from random import randint
-from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import Pool
 
 import requests
 from bs4 import BeautifulSoup
 
+from newsies.targets import DOCUMENT, HEADLINE
 from newsies.chroma_client import CRMADB
-from newsies.summarizer import summarize_story
-from newsies.targets import DOCUMENT, SUMMARY, HEADLINE
-from ..document_structures import Headline, Document
 
+from ..document_structures import Headline, Document
+from .sections import SECTIONS
 
 # pylint: disable=unidiomatic-typecheck
 
-MAX_TRIES = 5
 URL = "https://apnews.com"
-SECTIONS = [
-    "",
-    "world-news",
-    "us-news",
-    "politics",
-    "business",
-    "technology",
-    "science",
-    "health",
-    "entertainment",
-    "sports",
-    "oddities",
-]
+MAX_TRIES = 5
+
+
+def path(story_url: str):
+    """path"""
+    today = datetime.now().strftime(r"%Y%m%d")
+    story = story_url.split("/")[-1].split("?")[0]
+    os.makedirs(f"./daily_news/{today}", exist_ok=True)
+    return f"./daily_news/{today}/{story}.txt"
 
 
 def get_latest_news() -> Dict[str, Document]:
@@ -107,14 +100,6 @@ def get_latest_news() -> Dict[str, Document]:
     return documents
 
 
-def path(story_url: str):
-    """path"""
-    today = datetime.now().strftime(r"%Y%m%d")
-    story = story_url.split("/")[-1].split("?")[0]
-    os.makedirs(f"./daily_news/{today}", exist_ok=True)
-    return f"./daily_news/{today}/{story}.txt"
-
-
 def download_article(
     work: tuple,
     backoff: int = 0,
@@ -180,49 +165,6 @@ def download_article(
                     fh.write("Error parsing article\n")
         case _:
             print(f"Error getting article: {article_resp.status_code}")
-
-
-def news_summarizer(documents: Dict[str, Document]):
-    """
-    news_summarizer:
-      - Summarize news articles
-    """
-
-    def process_story(k: str, v: Document):
-        doc_id = k + "_summary"
-        metadata = Document(**v.dump())
-        # summarize_story will defer to existing summary in chromadb if it exists
-        metadata.text = summarize_story(v.uri, CRMADB, doc_id)
-        metadata.target = SUMMARY
-        print(f"Summarized: {k}")
-        CRMADB.add_documents({doc_id: metadata})
-
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        futures = [executor.submit(process_story, k, v) for k, v in documents.items()]
-        for future in futures:
-            future.result()  # Ensures all tasks complete before exiting
-
-
-def batch_news_summarizer(documents: Dict[str, Document]):
-    """
-    news_summarizer
-    Summarizes multiple news articles concurrently using ProcessPoolExecutor.
-    """
-
-    def process_story(k: str, v: Document):
-        doc_id = k + "_summary"
-        metadata = Document(**v.dump())
-        metadata.text = summarize_story(v.uri, CRMADB, doc_id)
-        metadata.target = "SUMMARY"
-        print(f"Summarized: {k}")
-        CRMADB.add_documents({doc_id: metadata})
-
-    with ProcessPoolExecutor(
-        max_workers=4
-    ) as executor:  # Use multiprocessing for efficiency
-        futures = [executor.submit(process_story, k, v) for k, v in documents.items()]
-        for future in futures:
-            future.result()  # Ensures all tasks complete before exiting
 
 
 def news_loader(documents: Dict[str, Document]):

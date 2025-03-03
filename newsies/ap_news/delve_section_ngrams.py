@@ -13,7 +13,7 @@ from typing import List
 
 from newsies.ap_news import SECTIONS
 from newsies.chroma_client import CRMADB
-from newsies.ap_news.main import Document
+from newsies.ap_news.summarizer import Document
 
 # from .classification_heuristics import TAGS_COLLECTION
 

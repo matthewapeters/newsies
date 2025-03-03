@@ -3,14 +3,18 @@ newsies.summarizer
 """
 
 import re
-from typing import List
+import torch
+import torch.multiprocessing as mp
 
-#
+# from typing import List
 
 from transformers import PegasusForConditionalGeneration, PegasusTokenizer
-import torch
-
 from newsies.chromadb_client import ChromaDBClient
+
+# pylint: disable=broad-exception-caught
+
+
+mp.set_start_method("spawn", force=True)
 
 DEVICE_STR = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -80,11 +84,15 @@ def summarize_story(uri: str, chroma_client: ChromaDBClient, doc_id: str = None)
       - Summarize a news article
     """
     if doc_id:
-        cached_summary = chroma_client.collection.get(
-            include=["documents"], ids=[doc_id]
-        )
-        if len(cached_summary["documents"]) > 0:
-            return cached_summary["documents"][0]  # Return cached result
+        try:
+            cached_summary = chroma_client.collection.get(
+                include=["documents"], ids=[doc_id]
+            )
+            if len(cached_summary["documents"]) > 0:
+                return cached_summary["documents"][0]  # Return cached result
+        except Exception:
+            # we can get errors if an empty result is returned
+            pass
 
     text = read_story(uri)
 

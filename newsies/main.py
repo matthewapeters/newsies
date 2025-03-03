@@ -39,18 +39,27 @@ if __name__ == "__main__":
     else:
         match sys.argv[1]:
             case "get-news":
-                from newsies.ap_news import (
+                from newsies.ap_news.latest_news import (
                     get_latest_news,
                     news_loader,
+                )
+
+                print("\nretrieving headlines\n")
+                headlines: Dict[str, Document] = get_latest_news()
+                print("\ndownloading headlines\n")
+                news_loader(headlines)
+
+                print("\nsummarizing stories\n")
+                from newsies.ap_news import (
                     batch_news_summarizer,
                     analyze_ngrams_per_section,
                     compute_tfidf,
                 )
 
-                headlines: Dict[str, Document] = get_latest_news()
-                news_loader(headlines)
                 batch_news_summarizer(headlines)
+                print("\ndetecting ngrams specific to news sections\n")
                 analyze_ngrams_per_section(headlines)
+                print("\n\tcomputing tf-idf for ngrams\n")
                 compute_tfidf()
             case "serve":
                 pass
