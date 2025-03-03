@@ -43,11 +43,15 @@ if __name__ == "__main__":
                     get_latest_news,
                     news_loader,
                     batch_news_summarizer,
+                    analyze_ngrams_per_section,
+                    compute_tfidf,
                 )
 
                 headlines: Dict[str, Document] = get_latest_news()
                 news_loader(headlines)
                 batch_news_summarizer(headlines)
+                analyze_ngrams_per_section(headlines)
+                compute_tfidf()
             case "serve":
                 pass
             case "cli":
