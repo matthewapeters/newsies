@@ -2,8 +2,8 @@
 newsies.ap_news
 """
 
-from .summarizer import (
-    news_summarizer,
+from .story_summarizer import (
+    summarize_story,
     batch_news_summarizer,
 )
 from .latest_news import (

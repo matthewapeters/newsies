@@ -39,27 +39,41 @@ if __name__ == "__main__":
     else:
         match sys.argv[1]:
             case "get-news":
-                from newsies.ap_news.latest_news import (
-                    get_latest_news,
-                    news_loader,
-                )
+                print("\nGET NEWS\n")
+                print("\n\t- retrieving headlines\n")
+                from newsies.ap_news.latest_news import get_latest_news
 
-                print("\nretrieving headlines\n")
                 headlines: Dict[str, Document] = get_latest_news()
-                print("\ndownloading headlines\n")
+
+                print("\n\t- news loader\n")
+                from newsies.ap_news.latest_news import news_loader
+
                 news_loader(headlines)
 
-                print("\nsummarizing stories\n")
-                from newsies.ap_news import (
-                    batch_news_summarizer,
-                    analyze_ngrams_per_section,
-                    compute_tfidf,
-                )
+                print("\n\t- headlines loader\n")
+                from newsies.ap_news.latest_news import headline_loader
+
+                headline_loader(headlines)
+            case "analyze":
+                print("\nANALYZE NEWS\n")
+                print("\t- retrieving headlines\n")
+                from newsies.ap_news.latest_news import get_latest_news
+
+                headlines: Dict[str, Document] = get_latest_news()
+
+                print("\n\t- summarizing stories")
+                from newsies.ap_news import batch_news_summarizer
 
                 batch_news_summarizer(headlines)
-                print("\ndetecting ngrams specific to news sections\n")
+
+                print("\n\t- detecting ngrams specific to news sections\n")
+                from newsies.ap_news import analyze_ngrams_per_section
+
                 analyze_ngrams_per_section(headlines)
-                print("\n\tcomputing tf-idf for ngrams\n")
+
+                print("\n\t- computing tf-idf for ngrams\n")
+                from newsies.ap_news import compute_tfidf
+
                 compute_tfidf()
             case "serve":
                 pass

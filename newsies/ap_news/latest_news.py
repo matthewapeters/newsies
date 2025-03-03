@@ -172,7 +172,7 @@ def news_loader(documents: Dict[str, Document]):
     news_loader:
       - Load news articles
     """
-    with Pool(processes=8) as ppool:
+    with Pool(processes=4) as ppool:
         ppool.map(
             download_article,
             [(v.url, v.headlines, v.sections) for v in documents.values()],
@@ -180,6 +180,11 @@ def news_loader(documents: Dict[str, Document]):
 
     CRMADB.add_documents(documents)
 
+
+def headline_loader(documents: Dict[str, Document]):
+    """
+    headline_loader
+    """
     headlines: Dict[str, Document] = {}
     for doc_id, doc in documents.items():
         for headline_idx, headline in enumerate(doc.headlines):

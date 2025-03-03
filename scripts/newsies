@@ -41,6 +41,12 @@ case $flag in
     get-news)
         python -m newsies.main get-news
         ;;
+    analyze)
+
+        export NLTK_DATA="~/nltk_data"
+        export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+        python -m newsies.main analyze
+        ;;
     cli)
         python -m newsies.main cli
         ;;
@@ -64,6 +70,7 @@ case $flag in
     *)
         echo "Usage: newsies [routine]"
         echo "get-news"
+        echo "analyze"
         echo "cli"
         echo "start"
         echo "stop"

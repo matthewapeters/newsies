@@ -5,7 +5,7 @@ tests.summary_test
 import pytest
 
 # from newsies.summarizer import summarize_story
-from newsies.batch_summarizer import summarize_story
+from newsies.ap_news import summarize_story
 from newsies.chroma_client import CRMADB
 
 summary_test_data = [
