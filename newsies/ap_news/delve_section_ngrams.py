@@ -5,12 +5,15 @@ newsies.classify.train
 import json
 import math
 import re
-from typing import List
+from typing import List, Dict
+
 from collections import Counter
 from nltk.util import ngrams
 from nltk.corpus import stopwords
-import nltk
+
+# import nltk
 from sentence_transformers import SentenceTransformer
+import torch
 
 from newsies.ap_news import SECTIONS
 from newsies.chromadb_client import ChromaDBClient
@@ -18,13 +21,16 @@ from newsies.chroma_client import CRMADB
 from newsies.document_structures import Document
 from newsies.collections import TAGS
 
-
-embedding_model = SentenceTransformer("all-MiniLM-L6-v2")  # Fast and good quality
+# pylint: disable=broad-exception-caught
+DEVICE_STR = "cuda" if torch.cuda.is_available() else "cpu"
+embedding_model = SentenceTransformer(
+    "all-MiniLM-L6-v2", device=DEVICE_STR
+)  # Fast and good quality
 
 
 news_sections = {s for s in SECTIONS if s != ""}
 
-nltk.download("stopwords")
+# nltk.download("stopwords")
 stop_words = set(stopwords.words("english"))
 
 
@@ -48,69 +54,159 @@ def analyze_ngrams_per_section(headlines):
       - read each of the news stories
     """
     v: Document = None
-    for v in headlines.values():
-        with open(v.uri, "r", encoding="utf8") as fh:
-            text = fh.read()
-        store_keywords_in_chromadb(story=text, sections=v.sections)
-
-
-def store_keywords_in_chromadb(story: str, sections: List[str], n=30, min_freq=2):
-    """Extracts and updates section-specific n-gram frequencies in ChromaDB."""
     chroma_client: ChromaDBClient = ChromaDBClient()
     chroma_client.collection_name = TAGS
+    texts: List[str] = []
+    story_sections: List[List[str]] = []
+    texts_len = 0
+    file_count = 0
+    buff_threshold = 40000
+    for v in headlines.values():
+        try:
+            with open(v.uri, "r", encoding="utf8") as fh:
+                text = fh.read()
+                texts_len += len(text)
+                texts.append(text)
+            story_sections.append(v.sections)
+            file_count += 1
+        except Exception as e:
+            print(f"WARNING: {e}: {v.uri} not found - skipping")
 
-    ngram_counts = extract_ngrams(story, n)
-    common_ngrams = ngram_counts.most_common()
-    filtered_ngrams = [
-        (ngram, freq) for ngram, freq in common_ngrams if freq >= min_freq
-    ]
-
-    for ngram, freq in filtered_ngrams:
-        ngram_id = f"ngram_{ngram}"
-        existing_data = chroma_client.collection.get(ids=[ngram_id])
-
-        if existing_data["documents"]:  # N-gram exists
-            metadata = existing_data["metadatas"][0]
-            section_freqs_raw = metadata.get("sections", "{}")
-            section_freqs = json.loads(section_freqs_raw)
-
-            # Update section frequency
-            for section in sections:
-                section_freqs[section] = section_freqs.get(section, 0) + freq
-
-            # Remove sections where frequency is too low
-            section_freqs = {
-                sec: f for sec, f in section_freqs.items() if f >= min_freq
-            }
-
-            if not section_freqs:  # Remove n-gram entirely if it has no strong section
-                chroma_client.collection.delete(ids=[ngram_id])
-                continue
-
-            metadata["sections"] = json.dumps(section_freqs)
-            metadata["most_likely_section"] = max(section_freqs, key=section_freqs.get)
-
-            chroma_client.collection.update(ids=[ngram_id], metadatas=[metadata])
-
-        else:  # New n-gram
-            section_metadata = json.dumps({section: freq for section in sections})
-            metadata = {
-                "ngram": ngram,
-                "sections": section_metadata,
-                "most_likely_section": sections[0],
-            }
-            # Generate proper embeddings
-            embedding = embedding_model.encode(ngram).tolist()
-
-            chroma_client.collection.add(
-                ids=[ngram_id],
-                metadatas=[metadata],
-                embeddings=[embedding],
+        if texts_len >= buff_threshold:
+            print(f"\t- processing {file_count} stories")
+            store_keywords_in_chromadb(
+                chroma_client=chroma_client, stories=texts, sections=story_sections
             )
+            texts_len = 0
+            texts.clear()
+            story_sections.clear()
+            file_count = 0
+    if texts:
+        print(f"\t- processing {file_count} stories")
+        store_keywords_in_chromadb(
+            chroma_client=chroma_client, stories=texts, sections=story_sections
+        )
 
-    print(
-        f"Stored/Updated {len(filtered_ngrams)} n-grams for sections: {", ".join(sections)}"
+
+def store_keywords_in_chromadb(
+    chroma_client: ChromaDBClient,
+    stories: List[str],
+    sections: List[List[str]],
+    n: int = 30,
+    min_freq: int = 2,
+    batch_size: int = 1000,
+):
+    """
+    Processes multiple texts and stores their meaningful n-grams in ChromaDB.
+
+    - Supports batch processing.
+    - Merges duplicate n-grams locally before database upsert.
+    - Retrieves existing n-grams to merge frequencies properly.
+
+    :param client: ChromaDB client connection.
+    :param collection_name: Name of the ChromaDB collection.
+    :param stories: List of texts to process.
+    :param sections: List of section lists corresponding to each text.
+    :param tokenizer: SentenceTransformer model for embeddings.
+    :param n: Max n-gram length.
+    :param min_freq: Minimum frequency for an n-gram to be stored.
+    :param batch_size: Max batch size for database upserts.
+    """
+    batch = {}
+
+    # Process each story
+    for text, text_sections in zip(stories, sections):
+        words = text.split()
+        ngram_counts = {}
+
+        # Generate n-grams
+        for i in range(len(words)):
+            for j in range(i + 1, min(i + n + 1, len(words) + 1)):
+                ngram = " ".join(words[i:j])
+                if ngram in ngram_counts:
+                    ngram_counts[ngram] += 1
+                else:
+                    ngram_counts[ngram] = 1
+
+        # Filter n-grams by min_freq
+        filtered_ngrams = {
+            ngram: count for ngram, count in ngram_counts.items() if count >= min_freq
+        }
+
+        # Store n-grams with section frequencies
+        for ngram, count in filtered_ngrams.items():
+            ngram_id = f"ngram_{ngram}"
+
+            if ngram in batch:
+                # Update local section frequency counts
+                for section in text_sections:
+                    batch[ngram]["metadata"]["sections"][section] = (
+                        batch[ngram]["metadata"]["sections"].get(section, 0) + count
+                    )
+            else:
+                # Initialize new entry
+                batch[ngram] = {
+                    "id": ngram_id,
+                    "metadata": {
+                        "ngram": ngram,
+                        "sections": {section: count for section in text_sections},
+                        "most_likely_section": "",  # Placeholder; updated later
+                    },
+                    "embeddings": embedding_model.encode(
+                        ngram, add_special_tokens=False
+                    ),
+                }
+
+        # Upsert when batch size is reached
+        if len(batch) >= batch_size:
+            _upsert_batch(chroma_client, batch)
+            batch.clear()  # Reset batch
+
+    # Insert remaining items
+    if batch:
+        _upsert_batch(chroma_client, batch)
+
+
+def _upsert_batch(chroma_client: ChromaDBClient, batch: Dict[str, Dict]):
+    """Handles merging of n-gram section frequencies before upserting to ChromaDB.
+
+    - Retrieves existing n-gram metadata.
+    - Merges section frequency counts locally.
+    - Converts "sections" metadata field to JSON for ChromaDB storage.
+    """
+
+    existing_docs = chroma_client.collection.get(
+        ids=[item["id"] for item in batch.values()]
     )
+
+    # Extract existing section frequencies from stored metadata
+    existing_data = {
+        existing_docs["ids"][idx]: (
+            json.loads(doc["sections"]) if "sections" in doc else {}
+        )
+        for idx, doc in enumerate(existing_docs["metadatas"])
+    }
+
+    for item in batch.values():
+        ngram_id = item["id"]
+
+        # Merge with existing section data if ngram exists in ChromaDB
+        if ngram_id in existing_data:
+            for section, count in existing_data[ngram_id].items():
+                item["metadata"]["sections"][section] = (
+                    item["metadata"]["sections"].get(section, 0) + count
+                )
+
+        # Convert sections dictionary to JSON string for ChromaDB storage
+        item["metadata"]["sections"] = json.dumps(item["metadata"]["sections"])
+
+    # Perform batch upsert
+    chroma_client.collection.upsert(
+        ids=[item["id"] for item in batch.values()],
+        metadatas=[item["metadata"] for item in batch.values()],
+        embeddings=[item["embeddings"] for item in batch.values()],
+    )
+    print(f"\t\t- batch upsert {len(batch)} ngrams")
 
 
 def compute_tfidf():
@@ -122,21 +218,22 @@ def compute_tfidf():
     """
     client = ChromaDBClient()
     client.collection_name = TAGS
+    batch_size = 1800
+    ids: List[str] = []
+    metas: List[Dict] = []
 
     # collection = client.get_collection("news_keywords")
     section_doc_counts = get_section_doc_counts()
     all_ngrams = client.collection.get()
 
     total_docs = sum(section_doc_counts.values())  # Total documents across all sections
-
     for ngram_id, metadata in zip(all_ngrams["ids"], all_ngrams["metadatas"]):
         metadata["tfidf"] = {}
 
-        num_sections = len(
-            metadata["sections"]
-        )  # In how many sections does this n-gram appear?
+        sections = json.loads(metadata["sections"])
+        num_sections = len(sections)  # In how many sections does this n-gram appear?
 
-        for section, freq in metadata["sections"].items():
+        for section, freq in sections.items():
             section_doc_count = section_doc_counts.get(section, 1)  # Avoid div-by-zero
 
             # Compute TF-IDF
@@ -148,8 +245,21 @@ def compute_tfidf():
         metadata["most_likely_section"] = max(
             metadata["tfidf"], key=metadata["tfidf"].get
         )
-
-        client.collection.update(ids=[ngram_id], metadatas=[metadata])
+        metadata["tfidf"] = json.dumps(metadata["tfidf"])
+        ids.append(ngram_id)
+        metas.append(metadata)
+        if len(ids) >= batch_size:
+            client.collection.update(ids=ids, metadatas=metas)
+            print(
+                f"\t- Updated {len(ids)} per-section TF-IDF scores using document counts."
+            )
+            ids.clear()
+            metas.clear()
+    if ids:
+        client.collection.update(ids=ids, metadatas=metas)
+        print(
+            f"\t- Updated {len(ids)} per-section TF-IDF scores using document counts."
+        )
 
     print("Updated per-section TF-IDF scores using document counts.")
 

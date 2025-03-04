@@ -50,25 +50,29 @@ def summarize_chunk(chunk, max_length=200):
 
 def read_story(uri) -> str:
     """read_story"""
-    with open(uri, "r", encoding="utf8") as f:
-        text = f.read()
-    # remove AP credit tags for Video or photos (and related caption) , as they are not in the text
-    # remove the AP legal at the end so it does not confuse the summary
-    text = re.sub(
-        r".*\(AP \w*\/\w* \w*\)|The Associated Press.*$|.*AP is solely responsible.*$|\n{2,}",
-        "\n",
-        text,
-    )
-    text = text.replace("\n\n", "\n")
-    # remove quotes and capitalization so we get a more balanced summary of the story
-    # quotes tend to super-cede other ideas in the story
-    text = (
-        text.replace('"', "")
-        .replace("”", "")
-        .replace("“", "")
-        .replace("' ", " ")
-        .lower()
-    )
+    text = "DOCUMENT NOT AVAILABLE"
+    try:
+        with open(uri, "r", encoding="utf8") as f:
+            text = f.read()
+        # remove AP credit tags for Video or photos (and related caption) , as they are not in the text
+        # remove the AP legal at the end so it does not confuse the summary
+        text = re.sub(
+            r".*\(AP \w*\/\w* \w*\)|The Associated Press.*$|.*AP is solely responsible.*$|\n{2,}",
+            "\n",
+            text,
+        )
+        text = text.replace("\n\n", "\n")
+        # remove quotes and capitalization so we get a more balanced summary of the story
+        # quotes tend to super-cede other ideas in the story
+        text = (
+            text.replace('"', "")
+            .replace("”", "")
+            .replace("“", "")
+            .replace("' ", " ")
+            .lower()
+        )
+    except Exception:
+        pass
     return text
 
 
