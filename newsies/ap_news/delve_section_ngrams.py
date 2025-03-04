@@ -2,28 +2,30 @@
 newsies.classify.train
 """
 
+import json
 import math
 import re
 from typing import List
 from collections import Counter
-from transformers import AutoTokenizer
 from nltk.util import ngrams
 from nltk.corpus import stopwords
 import nltk
+from sentence_transformers import SentenceTransformer
 
 from newsies.ap_news import SECTIONS
+from newsies.chromadb_client import ChromaDBClient
 from newsies.chroma_client import CRMADB
-from newsies.ap_news.summarizer import Document
+from newsies.document_structures import Document
+from newsies.collections import TAGS
 
-# from .classification_heuristics import TAGS_COLLECTION
 
-news_sections = set([s for s in SECTIONS if s != ""])
+embedding_model = SentenceTransformer("all-MiniLM-L6-v2")  # Fast and good quality
+
+
+news_sections = {s for s in SECTIONS if s != ""}
 
 nltk.download("stopwords")
 stop_words = set(stopwords.words("english"))
-
-# Load tokenizer (change model as needed)
-tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
 
 
 def extract_ngrams(text: str, n=30):
@@ -54,7 +56,9 @@ def analyze_ngrams_per_section(headlines):
 
 def store_keywords_in_chromadb(story: str, sections: List[str], n=30, min_freq=2):
     """Extracts and updates section-specific n-gram frequencies in ChromaDB."""
-    client = CRMADB
+    chroma_client: ChromaDBClient = ChromaDBClient()
+    chroma_client.collection_name = TAGS
+
     ngram_counts = extract_ngrams(story, n)
     common_ngrams = ngram_counts.most_common()
     filtered_ngrams = [
@@ -63,11 +67,12 @@ def store_keywords_in_chromadb(story: str, sections: List[str], n=30, min_freq=2
 
     for ngram, freq in filtered_ngrams:
         ngram_id = f"ngram_{ngram}"
-        existing_data = client.collection.get(ids=[ngram_id])
+        existing_data = chroma_client.collection.get(ids=[ngram_id])
 
         if existing_data["documents"]:  # N-gram exists
             metadata = existing_data["metadatas"][0]
-            section_freqs = metadata.get("sections", {})
+            section_freqs_raw = metadata.get("sections", "{}")
+            section_freqs = json.loads(section_freqs_raw)
 
             # Update section frequency
             for section in sections:
@@ -79,24 +84,28 @@ def store_keywords_in_chromadb(story: str, sections: List[str], n=30, min_freq=2
             }
 
             if not section_freqs:  # Remove n-gram entirely if it has no strong section
-                client.collection.delete(ids=[ngram_id])
+                chroma_client.collection.delete(ids=[ngram_id])
                 continue
 
-            metadata["sections"] = section_freqs
+            metadata["sections"] = json.dumps(section_freqs)
             metadata["most_likely_section"] = max(section_freqs, key=section_freqs.get)
 
-            client.collection.update(ids=[ngram_id], metadatas=[metadata])
+            chroma_client.collection.update(ids=[ngram_id], metadatas=[metadata])
 
         else:  # New n-gram
+            section_metadata = json.dumps({section: freq for section in sections})
             metadata = {
                 "ngram": ngram,
-                "sections": {section: freq for section in sections},
+                "sections": section_metadata,
                 "most_likely_section": sections[0],
             }
-            client.collection.add(
+            # Generate proper embeddings
+            embedding = embedding_model.encode(ngram).tolist()
+
+            chroma_client.collection.add(
                 ids=[ngram_id],
                 metadatas=[metadata],
-                embeddings=[tokenizer.encode(ngram, add_special_tokens=False)],
+                embeddings=[embedding],
             )
 
     print(
@@ -111,7 +120,9 @@ def compute_tfidf():
     Args:
         client: ChromaDB client instance.
     """
-    client = CRMADB
+    client = ChromaDBClient()
+    client.collection_name = TAGS
+
     # collection = client.get_collection("news_keywords")
     section_doc_counts = get_section_doc_counts()
     all_ngrams = client.collection.get()

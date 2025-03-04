@@ -1,3 +1,7 @@
+"""
+newsies.ap_news.sections
+"""
+
 SECTIONS = [
     "",
     "world-news",

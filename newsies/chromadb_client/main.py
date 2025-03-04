@@ -56,7 +56,7 @@ class ChromaDBClient:
             raise Exception("CHROMA_CREDS environment variable is not set")
 
         # Connect to ChromaDB
-        self._client = chromadb.HttpClient(
+        self._client: chromadb.HttpClient = chromadb.HttpClient(
             host=self._host,
             port=self._port,
             settings=Settings(

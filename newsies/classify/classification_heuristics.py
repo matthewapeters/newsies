@@ -5,10 +5,10 @@ newsies.classification_heuristics
 from newsies.actions import READ, LIST, COUNT  # , SYNTHESIZE
 from newsies.targets import DOCUMENT, HEADLINE, PAGE, SUMMARY, ENTITY
 from newsies.chromadb_client import ChromaDBClient
+from newsies.collections import TAGS
 
 # pylint: disable=global-statement, unused-argument, fixme
 
-TAGS_COLLECTION = "newsies_tags"
 
 NEWS_SECTION_HEURISTICS = {
     "front page": "",
@@ -177,8 +177,8 @@ def embed_targets(target_map: dict):
     # TARGET_HEURISTICS = target_map
     #
     # tags_db = ChromaDBClient()
-    # TAGS_COLLECTION = "newsies_tags"
-    # tags_db.collection_name = TAGS_COLLECTION
+    # TAGS =
+    # tags_db.collection_name = TAGS
     # tags_db.language = "en"
     # tags_db.embed_documents(
     #    document_ids=[k.replace(" ", "_") for k in target_map.keys()],
@@ -198,7 +198,7 @@ def refresh_targets():
 
     #
     tags_db = ChromaDBClient()
-    tags_db.collection_name = TAGS_COLLECTION
+    tags_db.collection_name = TAGS
     tags_db.language = "en"
     all_targets = tags_db.collection.get()
     target_count = len(all_targets["documents"])
