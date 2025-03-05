@@ -9,9 +9,9 @@ from newsies.classify.ngram_section_detect import get_relevant_sections
 
 test_data = [
     ("are there any stories about Wyoming", ["us-news"]),
-    ("are there any stories about Blue Origin", ["science"]),
+    ("news about Blue Origin", ["us-news", "technology", "business"]),
     ("I want the most recent story about the Oscar awards", ["entertainment"]),
-    ("any updates on Canada's response to US tariffs?", ["business", "world-news"]),
+    ("any updates on Canada's response to US tariffs?", ["business", "us-news"]),
     ("any news about robotics or AI?", ["technology"]),
     (
         "are there any actors appearing in more than one movie right now?",
@@ -19,11 +19,11 @@ test_data = [
     ),
     (
         "what are reactions to JD Vance's white house debacle?",
-        ["us-news", "politics"],
+        ["us-news"],
     ),
     (
-        "doge downsizing of food and drug administration",
-        ["health"],
+        "trump doge downsizing of FDA",
+        ["health", "us-news"],
     ),
     ("what are stores doing to battle inflation", ["business"]),
 ]

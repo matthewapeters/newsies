@@ -8,3 +8,4 @@ junit/*
 .vscode
 __pycache__/
 *.py[cod]
+notebooks/.ipynb_checkpoints/*

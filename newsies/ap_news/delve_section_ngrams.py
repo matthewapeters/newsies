@@ -11,7 +11,9 @@ from collections import Counter
 from nltk.util import ngrams
 from nltk.corpus import stopwords
 
-# import nltk
+import spacy
+from spacy.tokens import Doc
+
 from sentence_transformers import SentenceTransformer
 import torch
 
@@ -22,10 +24,15 @@ from newsies.document_structures import Document
 from newsies.collections import TAGS
 
 # pylint: disable=broad-exception-caught
+
 DEVICE_STR = "cuda" if torch.cuda.is_available() else "cpu"
 embedding_model = SentenceTransformer(
     "all-MiniLM-L6-v2", device=DEVICE_STR
 )  # Fast and good quality
+
+
+# Load spaCy model for English
+nlp = spacy.load("en_core_web_sm")
 
 
 news_sections = {s for s in SECTIONS if s != ""}
@@ -67,7 +74,7 @@ def analyze_ngrams_per_section(headlines):
                 text = fh.read()
                 texts_len += len(text)
                 texts.append(text)
-            story_sections.append(v.sections)
+            story_sections.append([s for s in v.sections if s != ""])
             file_count += 1
         except Exception as e:
             print(f"WARNING: {e}: {v.uri} not found - skipping")
@@ -86,6 +93,38 @@ def analyze_ngrams_per_section(headlines):
         store_keywords_in_chromadb(
             chroma_client=chroma_client, stories=texts, sections=story_sections
         )
+
+
+def generate_ngrams(
+    doc: Doc, max_ngram_len: int = 5, min_freq: int = 1
+) -> Dict[str, int]:
+    """
+    generate_ngrams
+    """
+    words: List[str] = []
+    # Apply Named Entity Removal
+    for token in doc:
+        if token.ent_type_:  # If token is part of a named entity, use entity label
+            words.append(f"[{token.ent_type_}]")
+
+        elif (
+            token.is_alpha and token.text.lower() not in stop_words
+        ):  # remove stopwords
+            words.append(token.text.lower())
+
+    ngram_counts = {}
+
+    # Generate n-grams
+    for i in range(len(words)):
+        for j in range(i + 1, min(i + max_ngram_len + 1, len(words) + 1)):
+            ngram = " ".join(words[i:j])
+            if ngram in ngram_counts:
+                ngram_counts[ngram] += 1
+            else:
+                ngram_counts[ngram] = 1
+
+    # Filter n-grams by min_freq
+    return {ngram: count for ngram, count in ngram_counts.items() if count >= min_freq}
 
 
 def store_keywords_in_chromadb(
@@ -113,49 +152,17 @@ def store_keywords_in_chromadb(
     :param batch_size: Max batch size for database upserts.
     """
     batch = {}
+    ne_weight = 2.0
 
     # Process each story
     for text, text_sections in zip(stories, sections):
-        words = text.split()
-        ngram_counts = {}
+        doc = nlp(text)
 
-        # Generate n-grams
-        for i in range(len(words)):
-            for j in range(i + 1, min(i + n + 1, len(words) + 1)):
-                ngram = " ".join(words[i:j])
-                if ngram in ngram_counts:
-                    ngram_counts[ngram] += 1
-                else:
-                    ngram_counts[ngram] = 1
+        named_ents = detect_named_entities(doc)
+        assemble_batch_metadata(named_ents, text_sections, batch, ne_weight)
 
-        # Filter n-grams by min_freq
-        filtered_ngrams = {
-            ngram: count for ngram, count in ngram_counts.items() if count >= min_freq
-        }
-
-        # Store n-grams with section frequencies
-        for ngram, count in filtered_ngrams.items():
-            ngram_id = f"ngram_{ngram}"
-
-            if ngram in batch:
-                # Update local section frequency counts
-                for section in text_sections:
-                    batch[ngram]["metadata"]["sections"][section] = (
-                        batch[ngram]["metadata"]["sections"].get(section, 0) + count
-                    )
-            else:
-                # Initialize new entry
-                batch[ngram] = {
-                    "id": ngram_id,
-                    "metadata": {
-                        "ngram": ngram,
-                        "sections": {section: count for section in text_sections},
-                        "most_likely_section": "",  # Placeholder; updated later
-                    },
-                    "embeddings": embedding_model.encode(
-                        ngram, add_special_tokens=False
-                    ),
-                }
+        filtered_ngrams = generate_ngrams(doc, n, min_freq)
+        assemble_batch_metadata(filtered_ngrams, text_sections, batch, 1.0)
 
         # Upsert when batch size is reached
         if len(batch) >= batch_size:
@@ -165,6 +172,36 @@ def store_keywords_in_chromadb(
     # Insert remaining items
     if batch:
         _upsert_batch(chroma_client, batch)
+
+
+def assemble_batch_metadata(
+    n_grams: iter, text_sections: List[str], batch: Dict[str:Dict], weight: float = 1.0
+) -> Dict[str, Dict]:
+    """
+    assemble_batch_metadata
+    """
+    # Store n-grams with section frequencies
+    for ngram, count in n_grams.items():
+        ngram_id = f"ngram_{ngram}"
+
+        if ngram in batch:
+            # Update local section frequency counts
+            for section in text_sections:
+                batch[ngram]["metadata"]["sections"][section] = (
+                    batch[ngram]["metadata"]["sections"].get(section, 0) + count
+                )
+        else:
+            # Initialize new entry
+            batch[ngram] = {
+                "id": ngram_id,
+                "metadata": {
+                    "ngram": ngram,
+                    "weight": weight,
+                    "sections": {section: count for section in text_sections},
+                    "most_likely_section": "",  # Placeholder; updated later
+                },
+                "embeddings": embedding_model.encode(ngram, add_special_tokens=False),
+            }
 
 
 def _upsert_batch(chroma_client: ChromaDBClient, batch: Dict[str, Dict]):
@@ -209,6 +246,24 @@ def _upsert_batch(chroma_client: ChromaDBClient, batch: Dict[str, Dict]):
     print(f"\t\t- batch upsert {len(batch)} ngrams")
 
 
+def detect_named_entities(doc: Doc) -> Counter:
+    """
+    detect_named_entities
+    """
+
+    named_entities = Counter()
+    for ent in doc.ents:
+        if any(token.pos_ == "PROPN" for token in ent):
+            named_entities[ent.text] += 1  # Count proper named entities
+        else:
+            # Remove stopwords from non-proper-noun entities
+            tokens = [token.text for token in ent if not token.is_stop]
+            if tokens:
+                named_entities[" ".join(tokens)] += 1
+
+    return named_entities
+
+
 def compute_tfidf():
     """
     Computes TF-IDF scores for stored n-grams per section.
@@ -232,29 +287,35 @@ def compute_tfidf():
 
         sections = json.loads(metadata["sections"])
         num_sections = len(sections)  # In how many sections does this n-gram appear?
+        weight: float = metadata[
+            "weight"
+        ]  # Named Entities may be weighted higher than speech patterns
 
-        for section, freq in sections.items():
-            section_doc_count = section_doc_counts.get(section, 1)  # Avoid div-by-zero
+        if num_sections > 0:
+            for section, freq in sections.items():
+                section_doc_count = section_doc_counts.get(
+                    section, 1
+                )  # Avoid div-by-zero
 
-            # Compute TF-IDF
-            tf = freq / section_doc_count  # Term Frequency (normalized)
-            idf = math.log(total_docs / num_sections)  # Inverse Document Frequency
-            metadata["tfidf"][section] = tf * idf
+                # Compute TF-IDF
+                tf = freq / section_doc_count  # Term Frequency (normalized)
+                idf = math.log(total_docs / num_sections)  # Inverse Document Frequency
+                metadata["tfidf"][section] = tf * idf * weight
 
-        # Assign the best section based on highest TF-IDF
-        metadata["most_likely_section"] = max(
-            metadata["tfidf"], key=metadata["tfidf"].get
-        )
-        metadata["tfidf"] = json.dumps(metadata["tfidf"])
-        ids.append(ngram_id)
-        metas.append(metadata)
-        if len(ids) >= batch_size:
-            client.collection.update(ids=ids, metadatas=metas)
-            print(
-                f"\t- Updated {len(ids)} per-section TF-IDF scores using document counts."
+            # Assign the best section based on highest TF-IDF
+            metadata["most_likely_section"] = max(
+                metadata["tfidf"], key=metadata["tfidf"].get
             )
-            ids.clear()
-            metas.clear()
+            metadata["tfidf"] = json.dumps(metadata["tfidf"])
+            ids.append(ngram_id)
+            metas.append(metadata)
+            if len(ids) >= batch_size:
+                client.collection.update(ids=ids, metadatas=metas)
+                print(
+                    f"\t- Updated {len(ids)} per-section TF-IDF scores using document counts."
+                )
+                ids.clear()
+                metas.clear()
     if ids:
         client.collection.update(ids=ids, metadatas=metas)
         print(

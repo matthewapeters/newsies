@@ -12,7 +12,9 @@ from newsies.collections import TAGS
 from newsies.chromadb_client import ChromaDBClient
 
 
-def get_relevant_sections(prompt: str, top_k: int = 5) -> List[str]:
+def get_relevant_sections(
+    prompt: str, top_k: int = 3, return_top: int = 2000
+) -> List[str]:
     """
     Queries ChromaDB to find the most relevant sections for a given prompt.
     - Uses embeddings to retrieve similar ngrams.
@@ -22,6 +24,7 @@ def get_relevant_sections(prompt: str, top_k: int = 5) -> List[str]:
     :param prompt: User input query.
     :param chroma_client: Instance of the ChromaDB client.
     :param top_k: Number of top relevant sections to return.
+    :param return_top: number of closest ngrams to analyze
     :return: List of most relevant section names.
     """
 
@@ -35,17 +38,23 @@ def get_relevant_sections(prompt: str, top_k: int = 5) -> List[str]:
     # Query ChromaDB for similar ngrams
     results = chroma_client.collection.query(
         query_embeddings=[prompt_embedding],
-        n_results=10,  # Fetch top 10 closest ngrams
+        n_results=return_top,  # Fetch top 10 closest ngrams
     )
 
     # Aggregate TF-IDF scores by section
     section_scores = defaultdict(float)
 
     for metadata in results["metadatas"][0]:  # Assuming single query, so index [0]
-        if "sections" in metadata:
-            section_tfidf = json.loads(metadata["sections"])  # Convert back from JSON
+        if "tfidf" in metadata:
+            section_tfidf = json.loads(metadata["tfidf"])  # Convert back from JSON
             for section, tfidf in section_tfidf.items():
-                section_scores[section] += tfidf  # Sum TF-IDF scores for each section
+                if section not in [
+                    "",
+                    "oddities",
+                ]:  # front page and oddities are ambiguous catch-alls
+                    section_scores[
+                        section
+                    ] += tfidf  # Sum TF-IDF scores for each section
 
     # Sort sections by total TF-IDF score (descending)
     sorted_sections = sorted(section_scores.items(), key=lambda x: x[1], reverse=True)
