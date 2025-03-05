@@ -7,7 +7,7 @@ from newsies.ap_news import (
     analyze_ngrams_per_section,
     compute_tfidf,
 )
-from . import TASK_STATUS
+from .task_status import TASK_STATUS
 
 
 def analyze_pipeline(task_id: str):

@@ -7,7 +7,7 @@ from newsies.ap_news.latest_news import (
     news_loader,
     headline_loader,
 )
-from . import TASK_STATUS
+from .task_status import TASK_STATUS
 
 # pylint: disable=broad-exception-caught
 
