@@ -51,7 +51,7 @@ case $flag in
         python -m newsies.main cli
         ;;
     serve)
-        python -m newsies.main serve
+        python -m newsies.main serve &
         ;;
     chroma-logs)
         echo "Chroma Logs"
