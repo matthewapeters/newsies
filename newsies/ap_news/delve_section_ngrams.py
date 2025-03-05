@@ -2,6 +2,7 @@
 newsies.classify.train
 """
 
+import pickle
 import json
 import math
 import re
@@ -18,6 +19,7 @@ from sentence_transformers import SentenceTransformer
 import torch
 
 from newsies.ap_news import SECTIONS
+from newsies.ap_news.latest_news import path
 from newsies.chromadb_client import ChromaDBClient
 from newsies.chroma_client import CRMADB
 from newsies.document_structures import Document
@@ -55,11 +57,17 @@ def extract_ngrams(text: str, n=30):
     return ngram_freq
 
 
-def analyze_ngrams_per_section(headlines):
+def analyze_ngrams_per_section(headlines=None):
     """
     analyze_ngrams_per_section
       - read each of the news stories
     """
+
+    if headlines is None:
+        pikl_path = path("latest_news").replace(".txt", ".pkl")
+        with open(pikl_path, "rb") as fh:
+            headlines = pickle.load(fh)
+
     v: Document = None
     chroma_client: ChromaDBClient = ChromaDBClient()
     chroma_client.collection_name = TAGS
@@ -175,7 +183,7 @@ def store_keywords_in_chromadb(
 
 
 def assemble_batch_metadata(
-    n_grams: iter, text_sections: List[str], batch: Dict[str:Dict], weight: float = 1.0
+    n_grams: iter, text_sections: List[str], batch: Dict[str, Dict], weight: float = 1.0
 ) -> Dict[str, Dict]:
     """
     assemble_batch_metadata

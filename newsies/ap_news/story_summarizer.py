@@ -2,6 +2,7 @@
 newsies.summarizer
 """
 
+import pickle
 import re
 from typing import List, Dict
 from concurrent.futures import ProcessPoolExecutor
@@ -16,6 +17,7 @@ from transformers import (
 from newsies.chroma_client import CRMADB
 from newsies.chromadb_client import ChromaDBClient
 from newsies.targets import SUMMARY
+from newsies.ap_news.latest_news import path
 
 from ..document_structures import Document
 
@@ -185,11 +187,16 @@ def process_batch_news_summarizer_story(k: str, v: Document):
     client.add_documents({doc_id: metadata})
 
 
-def batch_news_summarizer(documents: Dict[str, Document]):
+def batch_news_summarizer(documents: Dict[str, Document] = None):
     """
     news_summarizer
     Summarizes multiple news articles concurrently using ProcessPoolExecutor.
     """
+    if documents is None:
+        pikl_path = path("latest_news").replace(".txt", ".pkl")
+        with open(pikl_path, "rb") as fh:
+            documents = pickle.load(fh)
+
     max_workers = 2
     print(f"\t   - {max_workers} workers\n")
     with ProcessPoolExecutor(

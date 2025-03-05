@@ -8,6 +8,7 @@ import os
 from typing import Dict
 from random import randint
 from multiprocessing import Pool
+import pickle
 
 import requests
 from bs4 import BeautifulSoup
@@ -96,7 +97,9 @@ def get_latest_news() -> Dict[str, Document]:
         )
         for url in urls
     }
-
+    pickl_path = path("latest_news").replace(".txt", ".pkl")
+    with open(pickl_path, "wb") as fh:
+        pickle.dump(documents, fh)
     return documents
 
 
@@ -167,11 +170,16 @@ def download_article(
             print(f"Error getting article: {article_resp.status_code}")
 
 
-def news_loader(documents: Dict[str, Document]):
+def news_loader(documents: Dict[str, Document] = None):
     """
     news_loader:
       - Load news articles
     """
+    if documents is None:
+        pikl_path = path("latest_news").replace(".txt", ".pkl")
+        with open(pikl_path, "rb") as fh:
+            documents = pickle.load(fh)
+
     with Pool(processes=4) as ppool:
         ppool.map(
             download_article,
@@ -181,10 +189,15 @@ def news_loader(documents: Dict[str, Document]):
     CRMADB.add_documents(documents)
 
 
-def headline_loader(documents: Dict[str, Document]):
+def headline_loader(documents: Dict[str, Document] = None):
     """
     headline_loader
     """
+    if documents is None:
+        pikl_path = path("latest_news").replace(".txt", ".pkl")
+        with open(pikl_path, "rb") as fh:
+            documents = pickle.load(fh)
+
     headlines: Dict[str, Document] = {}
     for doc_id, doc in documents.items():
         for headline_idx, headline in enumerate(doc.headlines):
