@@ -9,7 +9,7 @@ import asyncio
 
 from fastapi import FastAPI, BackgroundTasks
 
-from pipelines import TASK_STATUS
+from newsies.pipelines import TASK_STATUS
 
 # pylint: disable=import-outside-toplevel
 app = FastAPI()
