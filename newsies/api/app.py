@@ -3,6 +3,7 @@ newsies.api.app
 
 """
 
+from typing import Dict
 import gc
 import uuid
 from datetime import datetime
@@ -11,6 +12,8 @@ from fastapi import FastAPI, BackgroundTasks
 
 from newsies.pipelines import TASK_STATUS, LOCK
 from newsies.ap_news.sections import SECTIONS
+from newsies.chroma_client import CRMADB
+from newsies.targets import HEADLINE
 
 # pylint: disable=import-outside-toplevel
 app = FastAPI()
@@ -69,7 +72,8 @@ async def run_analyze_pipeline(background_tasks: BackgroundTasks):
     """
     run_analyze_pipeline
     run the analyze pipeline.
-    The pipeline summarizes all stories, searches and adds named enttities and n-grams to the search engine
+    The pipeline summarizes all stories, searches and adds named enttities and n-grams
+    to the search engine
     """
     task_id = str(uuid.uuid4())
     TASK_STATUS[task_id] = "queued"
@@ -108,13 +112,32 @@ def list_sections():
     return {"news_sections": SECTIONS}
 
 
-@app.get("headlines/{section}")
+@app.get("/headlines/{section}")
 def list_headlines(section: str):
     """
     list_headlines
     returns todays headlines from the requested section
     """
+    resp = CRMADB.collection.get(
+        where={
+            "$and": [
+                {"target": {"$eq": HEADLINE}},
+                {
+                    "$or": [
+                        {"section0": {"$eq": section}},
+                        {"section1": {"$eq": section}},
+                        {"section2": {"$eq": section}},
+                    ]
+                },
+            ]
+        }
+    )
+    headlines: Dict[str] = list(
+        {h.strip().replace("‘", "'").replace("’", "'") for h in resp["documents"]}
+    )
+    headlines = sorted(headlines)
+
     return {
         "section": section,
-        "headlines": [],
+        "headlines": headlines,
     }
