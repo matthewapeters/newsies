@@ -9,3 +9,6 @@ junit/*
 __pycache__/
 *.py[cod]
 notebooks/.ipynb_checkpoints/*
+.newsies.pid
+newsies.log
+nohup.out

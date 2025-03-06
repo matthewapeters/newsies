@@ -51,7 +51,17 @@ case $flag in
         python -m newsies.main cli
         ;;
     serve)
-        python -m newsies.main serve &
+        nohup uvicorn newsies.api.app:app > newsies.log 2>&1 &
+        pid=$!
+        echo $pid>.newsies.pid
+        ;;
+    kill)
+        PID=`cat .newsies.pid`
+        echo "terminating newsies server ($PID)"
+        kill $PID
+        ;;
+    api)
+        xdg-open http://localhost:8000/docs
         ;;
     chroma-logs)
         echo "Chroma Logs"
@@ -68,14 +78,23 @@ case $flag in
         ;;
 
     *)
+        echo
+        echo Newsies Usage
+        echo
         echo "Usage: newsies [routine]"
-        echo "get-news"
-        echo "analyze"
-        echo "cli"
-        echo "start"
-        echo "stop"
-        echo "chroma-stats"
-        echo "chroma-logs"
+        echo "CLI Commands"
+        echo -e "\tget-news"
+        echo -e "\tanalyze"
+        echo -e "\tcli"
+        echo -e "\tstart"
+        echo -e "\tstop"
+        echo -e "\tchroma-stats"
+        echo -e "\tchroma-logs"
+        echo "--------------"
+        echo "API Server"
+        echo -e "\tserve"
+        echo -e "\tkill"
+        echo -e "\tapi"
         ;;
 esac
 
