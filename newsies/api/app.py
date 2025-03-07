@@ -187,7 +187,7 @@ async def login(username: str, redirect: str = "/"):
     """
     assign a session ID
     """
-    session, _ = init_session(username)
+    session, _ = init_session(username=username)
     response = RedirectResponse(url=f"{redirect}?{SESSION_COOKIE_NAME}={session.id}")
     response.set_cookie(key=SESSION_COOKIE_NAME, value=session.id, httponly=True)
     return response
