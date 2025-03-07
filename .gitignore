@@ -12,3 +12,4 @@ notebooks/.ipynb_checkpoints/*
 .newsies.pid
 newsies.log
 nohup.out
+docker/chroma_data/chroma.sqlite3-journal

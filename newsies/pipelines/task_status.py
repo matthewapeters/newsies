@@ -17,7 +17,22 @@ class AppStatus(dict):
         __setitem__
         """
         now = datetime.now().isoformat()
-        enhanced_value = {"status": value, "timestamp": now}
+        username: str = None
+        sessionid: str = None
+        if isinstance(key, tuple):
+            sessionid = key[1]
+            username = key[2]
+            key = key[0]
+        else:
+            sessionid = self[key]["session_id"]
+            username = self[key]["user_name"]
+
+        enhanced_value = {
+            "status": value,
+            "timestamp": now,
+            "session_id": sessionid,
+            "user_name": username,
+        }
         with open("newsies.log", "a", encoding="utf8") as log:
             log.write(f"INFO:\t{now}\tTASK STATUS\t{key}\t{value}")
         super().__setitem__(key, enhanced_value)

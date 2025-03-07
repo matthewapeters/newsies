@@ -17,7 +17,7 @@ def get_news_pipeline(task_id: str):
     get_news_pipeline
     """
     print("\nGET NEWS\n")
-    TASK_STATUS[task_id] = "start"
+    TASK_STATUS[task_id] = "started"
     try:
         print("\n\t- retrieving headlines\n")
         TASK_STATUS[task_id] = "running - step: retrieving headlines"

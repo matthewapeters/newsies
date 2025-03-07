@@ -2,4 +2,4 @@
 newsies.api
 """
 
-from .app import serve_api
+from .app import app

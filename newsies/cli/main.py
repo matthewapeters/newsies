@@ -3,7 +3,6 @@ newsies.cli.main
 """
 
 from datetime import datetime
-from typing import List
 
 from newsies.chromadb_client import ChromaDBClient
 from newsies.llm import LLM as llm

@@ -9,9 +9,8 @@ import uuid
 from datetime import datetime
 from functools import wraps
 
-from fastapi import FastAPI, BackgroundTasks, Request, Response, Depends
+from fastapi import FastAPI, BackgroundTasks, Request, HTTPException
 from fastapi.responses import RedirectResponse
-from starlette.middleware.sessions import SessionMiddleware
 
 from newsies.pipelines import TASK_STATUS, LOCK
 from newsies.ap_news.sections import SECTIONS
@@ -23,14 +22,12 @@ from newsies.session.init_session import init_session
 app = FastAPI()
 
 SESSION_COOKIE_NAME = "sessionid"
+USER_COOKIE_NAME = "usrnm"
 
 
 def get_session_id(request: Request):
     """Retrieve session ID from cookie or query parameters."""
-    session_id = request.cookies.get(SESSION_COOKIE_NAME) or request.query_params.get(
-        SESSION_COOKIE_NAME
-    )
-    return session_id
+    return request.cookies.get(SESSION_COOKIE_NAME)
 
 
 def require_session(endpoint: Callable):
@@ -38,16 +35,17 @@ def require_session(endpoint: Callable):
 
     @wraps(endpoint)
     async def wrapper(request: Request, *args, **kwargs):
-        session_id = get_session_id(request)
-        if not session_id:
+        sessionid = get_session_id(request)
+        if not sessionid:
             login_url = f"/login?redirect={request.url}"
             return RedirectResponse(url=login_url)
-        return await endpoint(request, session_id=session_id, *args, **kwargs)
+
+        return await endpoint(request, *args, **kwargs)
 
     return wrapper
 
 
-def run_get_news(task_id: str):
+def run_get_news(*args, **kwargs):
     """
     run_get_news
     """
@@ -55,7 +53,7 @@ def run_get_news(task_id: str):
 
     LOCK.acquire()
     try:
-        get_news_pipeline(task_id)
+        get_news_pipeline(*args, **kwargs)
         gc.collect()
     finally:
         LOCK.release()
@@ -77,7 +75,10 @@ def run_analyze(task_id: str):
 
 @app.get("/run/get-news")
 @require_session
-async def run_get_news_pipeline(background_tasks: BackgroundTasks):
+async def run_get_news_pipeline(
+    request: Request,
+    background_tasks: BackgroundTasks,
+):
     """
     run_get_news_pipeline
     run the get-news pipeline
@@ -85,14 +86,19 @@ async def run_get_news_pipeline(background_tasks: BackgroundTasks):
     Articles are then downloaded to local cache and embedded in search engine
     """
     task_id = str(uuid.uuid4())
-    TASK_STATUS[task_id] = "queued"
+    username = request.cookies[USER_COOKIE_NAME]
+    sess = request.cookies[SESSION_COOKIE_NAME]
+    TASK_STATUS[(task_id, sess, username)] = "queued"
     background_tasks.add_task(run_get_news, task_id)
     return {"message": "getting latest news from Associated Press", "task_id": task_id}
 
 
 @app.get("/run/analyze")
 @require_session
-async def run_analyze_pipeline(background_tasks: BackgroundTasks):
+async def run_analyze_pipeline(
+    request: Request,
+    background_tasks: BackgroundTasks,
+):
     """
     run_analyze_pipeline
     run the analyze pipeline.
@@ -100,7 +106,9 @@ async def run_analyze_pipeline(background_tasks: BackgroundTasks):
     to the search engine
     """
     task_id = str(uuid.uuid4())
-    TASK_STATUS[task_id] = "queued"
+    username = request.cookies[USER_COOKIE_NAME]
+    sess = request.cookies[SESSION_COOKIE_NAME]
+    TASK_STATUS[(task_id, sess, username)] = "queued"
     background_tasks.add_task(run_analyze, task_id)
     return {
         "message": "analyzing latest news from Associated Press",
@@ -110,7 +118,10 @@ async def run_analyze_pipeline(background_tasks: BackgroundTasks):
 
 @app.get("/task-status/{task_id}")
 @require_session
-def get_task_status(task_id: str):
+async def get_task_status(
+    request: Request,
+    task_id: str,
+):
     """
     get_task_status
     retrieve the current status of the requested task id
@@ -121,7 +132,7 @@ def get_task_status(task_id: str):
 
 @app.get("/tasks")
 @require_session
-def list_tasks():
+async def list_tasks(request: Request):
     """
     list_tasks
     provides the current set of admin tasks and their status
@@ -131,7 +142,7 @@ def list_tasks():
 
 @app.get("/sections")
 @require_session
-def list_sections(request: Request):
+async def list_sections(request: Request):
     """
     list_sections
     provides a list of sections from the Associated Press website
@@ -141,7 +152,10 @@ def list_sections(request: Request):
 
 @app.get("/headlines/{section}")
 @require_session
-def list_headlines(section: str):
+async def list_headlines(
+    request: Request,
+    section: str,
+):
     """
     list_headlines
     returns todays headlines from the requested section
@@ -173,7 +187,7 @@ def list_headlines(section: str):
 
 @app.get("/")
 @require_session
-def get_index():
+async def get_index(request: Request):
     """
     get_index
         redirects to /docs
@@ -183,11 +197,18 @@ def get_index():
 
 
 @app.get("/login/{username}")
-async def login(username: str, redirect: str = "/"):
+@app.get("/login")
+async def login(username: str = "", redirect: str = "/"):
     """
     assign a session ID
     """
+    if not username.strip():  # Check for empty or whitespace username
+        raise HTTPException(
+            status_code=403, detail="Username is required. IE: /login/<username>"
+        )
+
     session, _ = init_session(username=username)
-    response = RedirectResponse(url=f"{redirect}?{SESSION_COOKIE_NAME}={session.id}")
+    response = RedirectResponse(url=redirect)
     response.set_cookie(key=SESSION_COOKIE_NAME, value=session.id, httponly=True)
+    response.set_cookie(key=USER_COOKIE_NAME, value=username, httponly=True)
     return response

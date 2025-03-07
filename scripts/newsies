@@ -97,6 +97,8 @@ case $flag in
         nohup uvicorn newsies.api.app:app > newsies.log 2>&1 &
         pid=$!
         echo $pid>.newsies.pid
+	echo "Tailing newsies.log -- ctrl-c to end log tailing (server will continue)"
+	tail -f ./newsies.log
         ;;
     kill)
         PID=`cat .newsies.pid`
