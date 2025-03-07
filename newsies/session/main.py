@@ -2,9 +2,11 @@
 newsies.session
 """
 
+import json
+from typing import Dict, List
 import uuid
-from gpt4all import GPT4All
 
+from newsies.llm import LLM as llm
 from newsies.chromadb_client import ChromaDBClient
 from newsies.classify import prompt_analysis
 from newsies.session.turn import Turn
@@ -18,15 +20,28 @@ class Session:
     newsies.session.Session
     """
 
-    def __init__(self, llm, archive_db: ChromaDBClient):
-        self.id: uuid.UUID = uuid.uuid4()
-        self._llm: GPT4All = llm
-        self._archivedb = archive_db
-        self._sessiondb = ChromaDBClient()
-        self._sessiondb.collection_name = self.id
-        self._history = []
-        self._context = {}
-        self._username: str = None
+    def __init__(self, **kwargs):
+        self.id: str = kwargs.get("id", str(uuid.uuid4()))
+        self._history: List = kwargs.get("history", [])
+        self._context: Dict = kwargs.get("context", {})
+        self._username: str = kwargs.get("username")
+        self._collection: str = kwargs.get("collection")
+
+    def dumps(self):
+        """
+        dumps
+            returns a JSON string of the session
+            Used in caching
+        """
+        return json.dumps(
+            {
+                "id": self.id,
+                "history": self._history,
+                "context": self._context,
+                "username": self._username,
+                "collection": self._collection,
+            }
+        )
 
     @property
     def username(self) -> str:
@@ -48,6 +63,15 @@ class Session:
         """context"""
         return self._context
 
+    @property
+    def collection(self):
+        """collection"""
+        return self._collection
+
+    @collection.setter
+    def collection(self, c: str):
+        self._collection = c
+
     def _clone_last_turn(self, turn: Turn):
         last_turn: Turn = self._history[-1]
         turn.embedded_results = last_turn.embedded_results
@@ -64,10 +88,11 @@ class Session:
         turn = Turn(query, query_analysis)
         # results = None
         print(f"\n(newsies thinks you want to know about {query_analysis})\n")
-
+        _archivedb = ChromaDBClient()
+        _archivedb.collection_name = self._collection
         match query_analysis["context"]:
             case "NEW":
-                embedded_results = self._archivedb.retrieve_documents(
+                embedded_results = _archivedb.retrieve_documents(
                     query,
                     query_analysis,
                     "text",
@@ -78,7 +103,7 @@ class Session:
                     try:
                         turn.embedded_results = embedded_results
 
-                        summary_raw = self._archivedb.collection.get(
+                        summary_raw = _archivedb.collection.get(
                             ids=embedded_results["ids"][0], include=["documents"]
                         )
                         turn.summary_raw = summary_raw
@@ -103,7 +128,7 @@ class Session:
                         ordinal = query_analysis["ordinal"][0]
                         target = query_analysis["target"]
                         turn.do_read(
-                            ordinal=ordinal, target=target, archivedb=self._archivedb
+                            ordinal=ordinal, target=target, archivedb=_archivedb
                         )
                         self.add(turn)
                         return turn.response
@@ -117,7 +142,7 @@ class Session:
         prompt: str = turn.prompt()
         print(f"\nPROMPT:\n{prompt}\n-----------------------------------------\n")
 
-        turn.response = self._llm.generate(prompt)
+        turn.response = llm.generate(prompt)
         print("\nRESPONSE:\n", turn.response)
         self.add(turn)
         return turn.response

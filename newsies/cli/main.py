@@ -4,8 +4,7 @@ newsies.cli.main
 
 from datetime import datetime
 
-from newsies.chromadb_client import ChromaDBClient
-from newsies.llm import LLM as llm
+from newsies.chromadb_client import ChromaDBClient, collections
 from newsies.session import Session, init_session
 
 
@@ -16,8 +15,10 @@ def select_collection(
     """
     select_collection
     """
-    prior_collection = chromadb_client.collection.name
-    _collections = select_collection(chromadb_client, None)
+    prior_collection = (
+        chromadb_client.collection.name if chromadb_client.collection else "NONE"
+    )
+    _collections = collections(chromadb_client, None)
 
     for i in range(0, len(_collections), 2):
         if i < len(_collections) - 1:
@@ -30,38 +31,20 @@ def select_collection(
         archive_date = datetime.now().strftime(r"%Y-%m-%d")
 
     collection = f"ap_news_{archive_date}"
-    if collection in _collections:
-        print(f"Reading {collection}\n")
-        chromadb_client.collection_name = collection
+    if archive_date in _collections:
+        print(f"User Selected Collection: {collection}\n")
     else:
-        print(f"collection {collection} does not exist ")
+        print(f"collection {archive_date} does not exist")
         return select_collection(chromadb_client, None)
 
-    if chromadb_client.collection.name != prior_collection:
-        print(f"\nStarting new Session with {chromadb_client.collection.name}")
+    if collection != prior_collection:
+        print(f"\nStarting new Session with {collection}")
         new_chromadb_client = ChromaDBClient()
-        session = Session(llm, new_chromadb_client)
+        new_chromadb_client.collection_name = collection
+        session = Session()
         return (session, new_chromadb_client)
-    print(f"\n retaining session with {chromadb_client.collection.name}")
+    print(f"\n retaining session with {chromadb_client.collection_name}")
     return (None, chromadb_client)
-
-
-def collections(
-    chromadb_client: ChromaDBClient,
-    archive_date: str = None,
-):
-    """
-    collections
-    """
-    _collections = [f"ap_news_{archive_date}"]
-    if archive_date is None:
-        _collections = [
-            c.replace("ap_news_", "")
-            for c in chromadb_client.client.list_collections()
-            if c.startswith("ap_news_")
-        ]
-        _collections.sort()
-    return _collections
 
 
 def cli_read_news(archive_date: str = None):
@@ -69,7 +52,7 @@ def cli_read_news(archive_date: str = None):
     read_news:
       - read news from the database
     """
-    session, chromadb_client = init_session(None, None, None)
+    session, chromadb_client = init_session(None)
     if archive_date is None:
         _, chromadb_client = select_collection(chromadb_client, archive_date)
 

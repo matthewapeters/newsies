@@ -2,19 +2,30 @@ networks:
   net:
 
 services:
-  server:
+  chromadb:
     image: ghcr.io/chroma-core/chroma
     volumes:
       - ${PWD}/chroma_data:/chroma/chroma
     ports:
       - "8800:8000"
     env_file:
-     - ./.env
+     - .env
+     - .chroma_env
     environment:
-     - CHROMA_SERVER_AUTHN_CREDENTIALS:${CHROMADB_ENCRYPTED_CREDS}
-     - CHROMA_SERVER_AUTHN_PROVIDER:chromadb.auth.basic_authn.BasicAuthenticationServerProvider
-     - ANONYMIZED_TELEMETRY:TRUE
-     - IS_PERSISTENT:TRUE
-
+     # - CHROMA_SERVER_AUTHN_CREDENTIALS=${CHROMADB_ENCRYPTED_CREDS}
+     - CHROMA_SERVER_AUTHN_PROVIDER=chromadb.auth.basic_authn.BasicAuthenticationServerProvider
+     - ANONYMIZED_TELEMETRY=TRUE
+     - IS_PERSISTENT=TRUE
+    networks:
+      - net
+  redis:
+    image: redis
+    command: ["redis-server", "--save 60 1", "--loglevel warning", "--aclfile", "/usr/local/etc/redis/users.acl"]
+    ports:
+     - "6379:6379"
+    volumes:
+     - ${PWD}/redis_data:/data
+     - ${PWD}/redis-users.acl:/usr/local/etc/redis/users.acl:ro
+    restart: always
     networks:
       - net

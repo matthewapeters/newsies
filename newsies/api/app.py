@@ -11,14 +11,15 @@ from functools import wraps
 
 from fastapi import FastAPI, BackgroundTasks, Request, HTTPException
 from fastapi.responses import RedirectResponse
-
+from newsies.redis_client import cache_session, get_session
 from newsies.pipelines import TASK_STATUS, LOCK
 from newsies.ap_news.sections import SECTIONS
 from newsies.chroma_client import CRMADB
+from newsies.chromadb_client import ChromaDBClient, collections
 from newsies.targets import HEADLINE
 from newsies.session.init_session import init_session
 
-# pylint: disable=import-outside-toplevel
+# pylint: disable=import-outside-toplevel, broad-exception-caught, unused-argument
 app = FastAPI()
 
 SESSION_COOKIE_NAME = "sessionid"
@@ -208,7 +209,31 @@ async def login(username: str = "", redirect: str = "/"):
         )
 
     session, _ = init_session(username=username)
+    cache_session(session)
     response = RedirectResponse(url=redirect)
     response.set_cookie(key=SESSION_COOKIE_NAME, value=session.id, httponly=True)
     response.set_cookie(key=USER_COOKIE_NAME, value=username, httponly=True)
     return response
+
+
+@app.get("/collections")
+@require_session
+async def list_collections(request: Request):
+    """
+    list_collections
+    """
+    return {"collections": collections(ChromaDBClient())}
+
+
+@app.get("/collection/{collection}")
+@require_session
+async def enable_collection(request: Request, collection: str):
+    """enable_collection"""
+    try:
+        sessid = request.cookies[SESSION_COOKIE_NAME]
+        sess = get_session(sessid)
+        sess.collection = f"ap_news_{collection}"
+        cache_session(sess)
+        return {"status": "ok", "message": f"using collection {sess.collection}"}
+    except Exception as e:
+        return HTTPException(status_code=500, detail=f"ERROR: {e}")

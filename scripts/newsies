@@ -3,7 +3,10 @@ export CHROMADB_HOST=localhost
 export CHROMADB_PORT=8800
 export CHROMADB_USER="user1"
 chromadb_password="password123"
+export REDIS_USER="user2"
+redis_password="redisCache123#"
 export CHROMADB_CREDS="${CHROMADB_USER}:${chromadb_password}"
+export REDIS_CREDS="${REDIS_USER}:${redis_password}"
 export TOKENIZERS_PARALLELISM=true
 
 flag=$1
@@ -54,16 +57,24 @@ logo(){
 
 case $flag in
     start)
-        echo "Starting Chroma"
-	export CHROMADB_ENCRYPTED_CREDS=`docker run --rm --entrypoint htpasswd httpd:2 -Bbn $CHROMADB_USER $chromadb_password`
-	echo $CHROMADB_CREDS
-	echo $CHROMADB_ENCRYPTED_CREDS
+        echo "Starting ChromaDB and Redis"
+        export CHROMADB_ENCRYPTED_CREDS=`docker run --rm --entrypoint htpasswd httpd:2 -Bbn $CHROMADB_USER $chromadb_password`
+        echo "
+user default off
+user ${REDIS_USER} on >${redis_password} allcommands allkeys" > ./docker/redis-users.acl
+        echo $CHROMADB_CREDS
+        echo $REDIS_CREDS
+        echo $CHROMADB_ENCRYPTED_CREDS
+        echo "
+# CHROMA DB SETTINGS
+CHROMA_SERVER_AUTHN_CREDENTIALS='${CHROMADB_ENCRYPTED_CREDS}'
+        ">./docker/.chroma_env
         pushd docker &>/dev/null
-        docker compose up -d
+        docker compose up -d --remove-orphans
         popd &>/dev/null
         ;;
     stop)
-        echo "Stopping Chroma"
+        echo "Stopping ChromaDB and Redis"
         pushd docker &>/dev/null
         docker compose down
         popd &>/dev/null

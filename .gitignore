@@ -13,3 +13,6 @@ notebooks/.ipynb_checkpoints/*
 newsies.log
 nohup.out
 docker/chroma_data/chroma.sqlite3-journal
+docker/.chroma_env
+docker/redis_data/*
+docker/redis-users.acl

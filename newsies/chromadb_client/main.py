@@ -94,6 +94,8 @@ class ChromaDBClient:
     def collection_name(self, collection_name: str):
         self._collection_name = collection_name
         self._collection = self._client.get_or_create_collection(self._collection_name)
+        if self._collection is None:
+            raise Exception("FAILED TO CONNECT TO CHROMA DB")
 
     @property
     def collection(self) -> chromadb.Collection:
