@@ -26,6 +26,16 @@ class Session:
         self._sessiondb.collection_name = self.id
         self._history = []
         self._context = {}
+        self._username: str = None
+
+    @property
+    def username(self) -> str:
+        """username"""
+        return self._username
+
+    @username.setter
+    def username(self, name: str):
+        self._username = name
 
     def add(self, t: Turn):
         """

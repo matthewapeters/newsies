@@ -1,76 +1,99 @@
+"""
+newsies.cli.main
+"""
+
 from datetime import datetime
+from typing import List
 
 from newsies.chromadb_client import ChromaDBClient
 from newsies.llm import LLM as llm
-from newsies.session import Session
+from newsies.session import Session, init_session
 
 
-def select_collection(archive_date: str = None) -> ChromaDBClient:
-    chromadb_client = ChromaDBClient()
-    chromadb_client.language = "en"
+def select_collection(
+    chromadb_client: ChromaDBClient,
+    archive_date: str = None,
+) -> tuple[Session, ChromaDBClient]:
+    """
+    select_collection
+    """
+    prior_collection = chromadb_client.collection.name
+    _collections = select_collection(chromadb_client, None)
+
+    for i in range(0, len(_collections), 2):
+        if i < len(_collections) - 1:
+            print(f"{_collections[i]}\t\t{_collections[i+1]}")
+        else:
+            print(f"{_collections[i]}")
+    print("Enter an archive to read (ENTER for today): ", end="")
+    archive_date = input()
+    if archive_date == "":
+        archive_date = datetime.now().strftime(r"%Y-%m-%d")
+
+    collection = f"ap_news_{archive_date}"
+    if collection in _collections:
+        print(f"Reading {collection}\n")
+        chromadb_client.collection_name = collection
+    else:
+        print(f"collection {collection} does not exist ")
+        return select_collection(chromadb_client, None)
+
+    if chromadb_client.collection.name != prior_collection:
+        print(f"\nStarting new Session with {chromadb_client.collection.name}")
+        new_chromadb_client = ChromaDBClient()
+        session = Session(llm, new_chromadb_client)
+        return (session, new_chromadb_client)
+    print(f"\n retaining session with {chromadb_client.collection.name}")
+    return (None, chromadb_client)
+
+
+def collections(
+    chromadb_client: ChromaDBClient,
+    archive_date: str = None,
+):
+    """
+    collections
+    """
+    _collections = [f"ap_news_{archive_date}"]
     if archive_date is None:
-        collections = [
+        _collections = [
             c.replace("ap_news_", "")
             for c in chromadb_client.client.list_collections()
             if c.startswith("ap_news_")
         ]
-        collections.sort()
-        print("\nExisting News Archives:\n")
-        for i in range(0, len(collections), 2):
-            if i < len(collections) - 1:
-                print(f"{collections[i]}\t\t{collections[i+1]}")
-            else:
-                print(f"{collections[i]}")
-        print("Enter an archive to read (ENTER for today): ", end="")
-        archive_date = input()
-        if archive_date == "":
-            archive_date = datetime.now().strftime(r"%Y-%m-%d")
-    collection = f"ap_news_{archive_date}"
-    print(f"Reading {collection}\n")
-    existing_collections = chromadb_client.client.list_collections()
-    if collection in existing_collections:
-        chromadb_client.collection_name = collection
-        return chromadb_client
-    else:
-        print(f"collection {collection} does not exist ")
-        return select_collection(None)
+        _collections.sort()
+    return _collections
 
 
-def read_news(archive_date: str = None):
+def cli_read_news(archive_date: str = None):
     """
     read_news:
       - read news from the database
     """
+    session, chromadb_client = init_session(None, None, None)
     if archive_date is None:
-        chromadb_client = select_collection(archive_date)
+        _, chromadb_client = select_collection(chromadb_client, archive_date)
 
     exit_now = False
 
-    session = Session(llm, chromadb_client)
-
-    while exit_now == False:
+    while exit_now is False:
 
         # Test locally hosted RAG
-        # query = "How does deep learning differ from machine learning and what role does transformer play?"
+        # query = "How does deep learning differ from machine learning and what
+        # role does transformer play?"
         query = input(
-            f"session {session.id}:\nQuery Newsies Agent {chromadb_client.collection.name} (cc to change collection / quit to exit):\n "
+            f"session {session.id}:\nQuery Newsies Agent "
+            f"{chromadb_client.collection.name} (cc to change collection / quit to exit):\n "
         ).strip()
         match query:
             case "quit":
                 exit_now = True
             case "cc":
-                prior_collection = chromadb_client.collection.name
-                new_chromadb_client = select_collection(None)
-                if new_chromadb_client.collection.name != prior_collection:
-                    print(
-                        f"\nStarting new Session with {new_chromadb_client.collection.name}"
-                    )
-                    session = Session(llm, new_chromadb_client)
-                    chromadb_client = new_chromadb_client
-                else:
-                    print(
-                        f"\n retaining session with {chromadb_client.collection.name}"
-                    )
+                new_session, chromadb_client = select_collection(
+                    chromadb_client, archive_date
+                )
+                if new_session:
+                    session = new_session
             case "":
                 continue
             case _:

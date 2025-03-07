@@ -3,6 +3,7 @@ newsies.main
 """
 
 import sys
+import uuid
 
 # pylint: disable=import-outside-toplevel
 
@@ -15,6 +16,9 @@ def usage():
                 Newsies
           Interactive News Explorer
 
+    SUGGESION:
+        Use the ./scripts/newsies script - it has greater functionality
+
     USAGE:
 
         newsies [routine] [options]
@@ -24,37 +28,80 @@ def usage():
           * cli <archive date> - interactive command-line agent
             - archive date in the form YYYY-MM-DD
             - defaults to today
-          * serve - serve the newsies API for integration
-
-
-
           """
     )
 
 
+def logo():
+    """logo"""
+    print(
+        """
+        +----------------------------------------+
+        |                                        |
+        |             .......                    |
+        |            .~~~~~~~~..                 |
+        |           .~.~~~~~.......              |
+        |           .~~~~... ..   .              |
+        |           .~~~...~:~~~.                |
+        |           .~. .~+:+:~~.                |
+        |              ..:::+~~.                 |
+        |           ~:::~::~:~~~~~~~..           |
+        |         .=o=+==+~:+++++=====+:.        |
+        |        .o==++=+~~=====+===+=+=+.       |
+        |       ~o===+++~.+====++==++++++++~     |
+        |      ~o===+:~~.:o===++::+~::=++++=:    |
+        |      =o==+~~~~+===+:+++~::..::+==+:    |
+        |     .=oo=+:::::::~~~::+.~~  .+==++~    |
+        |      :====+:=o+.......  . .~==++:.     |
+        |      :o===++o=+~ ..... .~:+=+:~+.      |
+        |     .=oo::=+=o+~ .... .:+++:.          |
+        |     +ooo==+++++~ .... ..::~            |
+        |    :oo==oo++:::~  ....                 |
+        |    =oo==o=++::++  ......               |
+        |    .=ooooo=+:+:=. ... ...              |
+        |      .~::+++++++  .... ...             |
+        |        ~........ .....  .              |
+        |        ........ ......                 |
+        |        ...... .  ...  . .              |
+        |         ~... .. ..........             |
+        |         ~.....  ..........             |
+        |         ........  ..... .              |
+        |           ..... . .~.....              |
+        |            .~...~   .....              |
+        |             ~~...    ....              |
+        |             ~~~..    .~...             |
+        |            .~:~~.    .:..~             |
+        |          .~:~~~..    .::~~.            |
+        |        .~:::~...     .::~:~.           |
+        |       .::~~~..       .::::~~.          |
+        |                       ....             |
+        +----------------------------------------+
+"""
+    )
+
+
 if __name__ == "__main__":
+    logo()
+
     if len(sys.argv) < 2:
         usage()
     else:
+        TASK_ID = str(uuid.uuid4())
         match sys.argv[1]:
             case "get-news":
                 from .pipelines import get_news_pipeline
 
-                get_news_pipeline()
+                get_news_pipeline(task_id=TASK_ID)
             case "analyze":
                 from .pipelines import analyze_pipeline
 
-                analyze_pipeline()
-            case "serve":
-                from .api import serve_api
-
-                serve_api()
+                analyze_pipeline(task_id=TASK_ID)
             case "cli":
-                from newsies.cli import read_news
+                from newsies.cli import cli_read_news
 
                 date_archive: str = None
                 if len(sys.argv) > 3:
                     date_archive = sys.argv[2]
-                read_news(date_archive)
+                cli_read_news(date_archive)
             case _:
                 usage()
