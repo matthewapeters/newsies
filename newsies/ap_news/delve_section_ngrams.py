@@ -57,14 +57,14 @@ def extract_ngrams(text: str, n=30):
     return ngram_freq
 
 
-def analyze_ngrams_per_section(headlines=None):
+def analyze_ngrams_per_section(headlines=None, archive: str = None):
     """
     analyze_ngrams_per_section
       - read each of the news stories
     """
 
     if headlines is None:
-        pikl_path = path("latest_news").replace(".txt", ".pkl")
+        pikl_path = path("latest_news", archive).replace(".txt", ".pkl")
         with open(pikl_path, "rb") as fh:
             headlines = pickle.load(fh)
 

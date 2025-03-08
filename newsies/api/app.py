@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from functools import wraps
 
-from fastapi import FastAPI, BackgroundTasks, Request, HTTPException
+from fastapi import FastAPI, BackgroundTasks, Request, HTTPException, Path
 from fastapi.responses import RedirectResponse
 from newsies.redis_client import cache_session, get_session
 from newsies.pipelines import TASK_STATUS, LOCK
@@ -99,11 +99,23 @@ async def run_get_news_pipeline(
     return {"message": "getting latest news from Associated Press", "task_id": task_id}
 
 
-@app.get("/run/analyze/{archive}")
 @app.get("/run/analyze")
 @require_session
+async def run_analyze_pipeline_today(
+    request: Request, background_tasks: BackgroundTasks
+):
+    """run_analyze_pipeline_today"""
+    return await run_analyze_pipeline(
+        request, background_tasks, datetime.now().strftime(r"%Y-%m-%d")
+    )
+
+
+@app.get("/run/analyze/{archive}")
+@require_session
 async def run_analyze_pipeline(
-    request: Request, background_tasks: BackgroundTasks, archive: str = None
+    request: Request,
+    background_tasks: BackgroundTasks,
+    archive: str = Path(..., regex=r"\d{4}-\d{2}-\d{2}"),  # Enforces YYYY-MM-DD format
 ):
     """
     run_analyze_pipeline

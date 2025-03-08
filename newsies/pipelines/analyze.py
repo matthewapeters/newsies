@@ -11,6 +11,8 @@ from newsies.ap_news import (
 )
 from .task_status import TASK_STATUS
 
+# pylint: disable=broad-exception-caught
+
 
 def analyze_pipeline(task_id: str, archive: str = None):
     """
@@ -36,7 +38,7 @@ def analyze_pipeline(task_id: str, archive: str = None):
         TASK_STATUS[task_id] = (
             "running - step: computing tf-idf for named entities and n-grams"
         )
-        compute_tfidf(archive=archive)
+        compute_tfidf()
         TASK_STATUS[task_id] = "complete"
     except Exception as e:
         TASK_STATUS[task_id] = f"error: {e}"
