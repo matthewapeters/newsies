@@ -3,7 +3,7 @@ newsies.session
 """
 
 import json
-from typing import Dict, List
+from typing import Any, Dict, List, Union
 import uuid
 
 from newsies.llm import LLM as llm
@@ -33,15 +33,20 @@ class Session:
             returns a JSON string of the session
             Used in caching
         """
-        return json.dumps(
-            {
-                "id": self.id,
-                "history": self._history,
-                "context": self._context,
-                "username": self._username,
-                "collection": self._collection,
-            }
-        )
+        return json.dumps(self.dump())
+
+    def dump(self) -> Dict[str, Union[str, List, Dict]]:
+        """
+        dump
+            returns a dict of the session
+        """
+        return {
+            "id": self.id,
+            "history": self._history,
+            "context": self._context,
+            "username": self._username,
+            "collection": self._collection,
+        }
 
     def add_history(self, o):
         """add_history"""

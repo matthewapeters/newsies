@@ -105,15 +105,27 @@ CHROMA_SERVER_AUTHN_CREDENTIALS='${CHROMADB_ENCRYPTED_CREDS}'
         python -m newsies.main cli
         ;;
     serve)
+        # this should run even after SIGINT or SIGTERM are trapped
         nohup uvicorn newsies.api.app:app > newsies.log 2>newsies_err.log 1>newsies.log &
         serve_pid=$!
         echo $serve_pid>.newsies.pid
         disown $serve_pid
+
+        # tail the logs until SIGINT or SIGTERM are trapped
         tail -f ./newsies*.log &
         tail_pid=$!
         disown $tail_pid
-        echo "Tailing newsies.log -- ctrl-c to end log tailing (server will continue)"
-        wait $tail_pid
+        echo "Tailing newsies logs -- ANY KEY to stop log tailing (server will continue)"
+
+        # only kill the tail process - leave the uvicorn process running
+        kill_tail(){
+            echo "stop tailing newsies log files (${tail_pid})"
+            kill $tail_pid
+        }
+
+        # block until the user hits a key
+        read -s -n 1
+        kill_tail
         ;;
     kill)
         PID=`cat .newsies.pid`

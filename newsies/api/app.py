@@ -282,4 +282,13 @@ async def enable_collection(request: Request, collection: str):
         return HTTPException(status_code=500, detail=f"ERROR: {e}")
 
 
+@router_v1.get("/session")
+@require_session
+async def dump_session(request: Request):
+    """dump_session"""
+    session_id = request.cookies[SESSION_COOKIE_NAME]
+    s = get_session(session_id)
+    return s.dump()
+
+
 app.include_router(router_v1, prefix="/v1")
