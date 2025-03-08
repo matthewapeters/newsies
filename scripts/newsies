@@ -105,11 +105,15 @@ CHROMA_SERVER_AUTHN_CREDENTIALS='${CHROMADB_ENCRYPTED_CREDS}'
         python -m newsies.main cli
         ;;
     serve)
-        nohup uvicorn newsies.api.app:app > newsies.log 2>&1 &
-        pid=$!
-        echo $pid>.newsies.pid
-	echo "Tailing newsies.log -- ctrl-c to end log tailing (server will continue)"
-	tail -f ./newsies.log
+        nohup uvicorn newsies.api.app:app > newsies.log 2>newsies_err.log 1>newsies.log &
+        serve_pid=$!
+        echo $serve_pid>.newsies.pid
+        disown $serve_pid
+        tail -f ./newsies*.log &
+        tail_pid=$!
+        disown $tail_pid
+        echo "Tailing newsies.log -- ctrl-c to end log tailing (server will continue)"
+        wait $tail_pid
         ;;
     kill)
         PID=`cat .newsies.pid`

@@ -33,9 +33,9 @@ def paginate_dict(large_dict: Dict, page_size: int = 100) -> List[Dict]:
 class Turn:
     """Turn"""
 
-    def __init__(self, query: str, query_analysis: dict):
+    def __init__(self, query: str = "", query_analysis: dict = None):
         self.query = query
-        self.query_analysis = query_analysis
+        self.query_analysis = query_analysis or {}
         self._embedded_results = None
         self._summary_raw = None
         self._summaries = None
@@ -140,7 +140,7 @@ class Turn:
                 )[0]
                 with open(uri, "r", encoding="utf8") as fh:
                     self.response = fh.read()
-                    return
+                    return self.response
             case targets.SUMMARY:
                 # if the context target is not summary, retrieve the summary for the corresponding
                 # document
@@ -149,7 +149,7 @@ class Turn:
                 )[0]
                 if self.target_type != target:
                     self.response = archivedb.collection.get(ids=[], where={})
-                    return
+                    return self.response
                 else:
                     pass
             case _:

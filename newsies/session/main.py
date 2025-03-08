@@ -43,6 +43,10 @@ class Session:
             }
         )
 
+    def add_history(self, o):
+        """add_history"""
+        self._history.append(o)
+
     @property
     def username(self) -> str:
         """username"""

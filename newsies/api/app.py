@@ -9,18 +9,20 @@ import uuid
 from datetime import datetime
 from functools import wraps
 
-from fastapi import FastAPI, BackgroundTasks, Request, HTTPException, Path
+from fastapi import FastAPI, BackgroundTasks, Request, HTTPException, Path, APIRouter
 from fastapi.responses import RedirectResponse
 from newsies.redis_client import cache_session, get_session
 from newsies.pipelines import TASK_STATUS, LOCK
 from newsies.ap_news.sections import SECTIONS
-from newsies.chroma_client import CRMADB
 from newsies.chromadb_client import ChromaDBClient, collections
 from newsies.targets import HEADLINE
+from newsies.session import Session, Turn
 from newsies.session.init_session import init_session
 
-# pylint: disable=import-outside-toplevel, broad-exception-caught, unused-argument
+# pylint: disable=import-outside-toplevel, broad-exception-caught, unused-argument, protected-access
 app = FastAPI()
+
+router_v1 = APIRouter()
 
 SESSION_COOKIE_NAME = "sessionid"
 USER_COOKIE_NAME = "usrnm"
@@ -74,7 +76,7 @@ def run_analyze(task_id: str, archive: str = None):
         LOCK.release()
 
 
-@app.get("/run/get-news")
+@router_v1.get("/run/get-news")
 @require_session
 async def run_get_news_pipeline(
     request: Request,
@@ -99,7 +101,7 @@ async def run_get_news_pipeline(
     return {"message": "getting latest news from Associated Press", "task_id": task_id}
 
 
-@app.get("/run/analyze")
+@router_v1.get("/run/analyze")
 @require_session
 async def run_analyze_pipeline_today(
     request: Request, background_tasks: BackgroundTasks
@@ -110,7 +112,7 @@ async def run_analyze_pipeline_today(
     )
 
 
-@app.get("/run/analyze/{archive}")
+@router_v1.get("/run/analyze/{archive}")
 @require_session
 async def run_analyze_pipeline(
     request: Request,
@@ -142,7 +144,7 @@ async def run_analyze_pipeline(
     }
 
 
-@app.get("/task-status/{task_id}")
+@router_v1.get("/task-status/{task_id}")
 @require_session
 async def get_task_status(
     request: Request,
@@ -156,7 +158,7 @@ async def get_task_status(
     return {"task_id": task_id, "status": status}
 
 
-@app.get("/tasks")
+@router_v1.get("/tasks")
 @require_session
 async def list_tasks(request: Request):
     """
@@ -166,7 +168,7 @@ async def list_tasks(request: Request):
     return {"newsies_tasks": TASK_STATUS.sorted(), "as_of": datetime.now().isoformat()}
 
 
-@app.get("/sections")
+@router_v1.get("/sections")
 @require_session
 async def list_sections(request: Request):
     """
@@ -176,7 +178,7 @@ async def list_sections(request: Request):
     return {"news_sections": SECTIONS}
 
 
-@app.get("/headlines/{section}")
+@router_v1.get("/headlines/{section}")
 @require_session
 async def list_headlines(
     request: Request,
@@ -184,9 +186,16 @@ async def list_headlines(
 ):
     """
     list_headlines
-    returns todays headlines from the requested section
+    returns headlines from the requested section
     """
-    resp = CRMADB.collection.get(
+    sessid = request.cookies[SESSION_COOKIE_NAME]
+    session: Session = get_session(sessid)
+    client = ChromaDBClient()
+    client.collection_name = (
+        session.collection or f"ap_news_{datetime.now().strftime(r'%Y-%m-%d')}"
+    )
+
+    resp = client.collection.get(
         where={
             "$and": [
                 {"target": {"$eq": HEADLINE}},
@@ -205,10 +214,16 @@ async def list_headlines(
     )
     headlines = sorted(headlines)
 
-    return {
+    output = {
         "section": section,
         "headlines": headlines,
     }
+    turn = Turn()
+    turn._paged_document_map = [{"0": output}]
+    session.add_history(turn)
+    cache_session(session)
+
+    return output
 
 
 @app.get("/")
@@ -223,10 +238,9 @@ async def get_index(request: Request):
 
 
 @app.get("/login/{username}")
-@app.get("/login")
 async def login(username: str = "", redirect: str = "/"):
     """
-    assign a session ID
+    login and create a session for your user
     """
     if not username.strip():  # Check for empty or whitespace username
         raise HTTPException(
@@ -241,19 +255,23 @@ async def login(username: str = "", redirect: str = "/"):
     return response
 
 
-@app.get("/collections")
+@router_v1.get("/collections")
 @require_session
 async def list_collections(request: Request):
     """
     list_collections
+        lists the archived collections in the system
     """
     return {"collections": collections(ChromaDBClient())}
 
 
-@app.get("/collection/{collection}")
+@router_v1.get("/collection/{collection}")
 @require_session
 async def enable_collection(request: Request, collection: str):
-    """enable_collection"""
+    """
+    enable_collection
+        selects a collection date for your session
+    """
     try:
         sessid = request.cookies[SESSION_COOKIE_NAME]
         sess = get_session(sessid)
@@ -262,3 +280,6 @@ async def enable_collection(request: Request, collection: str):
         return {"status": "ok", "message": f"using collection {sess.collection}"}
     except Exception as e:
         return HTTPException(status_code=500, detail=f"ERROR: {e}")
+
+
+app.include_router(router_v1, prefix="/v1")
