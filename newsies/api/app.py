@@ -60,7 +60,7 @@ def run_get_news(*args, **kwargs):
         LOCK.release()
 
 
-def run_analyze(task_id: str):
+def run_analyze(task_id: str, archive: str = None):
     """
     run_analyze
     """
@@ -68,7 +68,7 @@ def run_analyze(task_id: str):
 
     LOCK.acquire()
     try:
-        analyze_pipeline(task_id)
+        analyze_pipeline(task_id, archive)
         gc.collect()
     finally:
         LOCK.release()
@@ -89,16 +89,21 @@ async def run_get_news_pipeline(
     task_id = str(uuid.uuid4())
     username = request.cookies[USER_COOKIE_NAME]
     sess = request.cookies[SESSION_COOKIE_NAME]
-    TASK_STATUS[(task_id, sess, username)] = "queued"
+    TASK_STATUS[task_id] = {
+        "status": "queued",
+        "session_id": sess,
+        "task": "get-news",
+        "username": username,
+    }
     background_tasks.add_task(run_get_news, task_id)
     return {"message": "getting latest news from Associated Press", "task_id": task_id}
 
 
+@app.get("/run/analyze/{archive}")
 @app.get("/run/analyze")
 @require_session
 async def run_analyze_pipeline(
-    request: Request,
-    background_tasks: BackgroundTasks,
+    request: Request, background_tasks: BackgroundTasks, archive: str = None
 ):
     """
     run_analyze_pipeline
@@ -109,8 +114,13 @@ async def run_analyze_pipeline(
     task_id = str(uuid.uuid4())
     username = request.cookies[USER_COOKIE_NAME]
     sess = request.cookies[SESSION_COOKIE_NAME]
-    TASK_STATUS[(task_id, sess, username)] = "queued"
-    background_tasks.add_task(run_analyze, task_id)
+    TASK_STATUS[task_id] = {
+        "status": "queued",
+        "session_id": sess,
+        "task": "analyze",
+        "username": username,
+    }
+    background_tasks.add_task(run_analyze, task_id, archive)
     return {
         "message": "analyzing latest news from Associated Press",
         "task_id": task_id,

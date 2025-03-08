@@ -3,7 +3,6 @@ tests.session_test
 """
 
 from newsies.session import Session
-from newsies.chromadb_client import ChromaDBClient
 
 
 def test__list_all_science_headlines():
@@ -12,9 +11,9 @@ def test__list_all_science_headlines():
         test to get the list of all of a day's science headlines
         and then analyze them for common themes
     """
-    db = ChromaDBClient()
-    db.collection_name = "ap_news_2025-03-01"
-    s = Session(db)
+
+    s = Session()
+    s.collection = "ap_news_2025-03-07"
     query = (
         "list only the headlines from each of the articles in today's science section."
     )

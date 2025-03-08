@@ -3,6 +3,7 @@ newsies.summarizer
 """
 
 import pickle
+from datetime import datetime
 import re
 from typing import List, Dict
 from concurrent.futures import ProcessPoolExecutor
@@ -173,7 +174,7 @@ def summarize_story(uri: str, chroma_client, doc_id: str = None, max_tokens: int
     return " ".join(final_summaries)
 
 
-def process_batch_news_summarizer_story(k: str, v: Document):
+def process_batch_news_summarizer_story(k: str, v: Document, archive: str = None):
     """
     process_story
     """
@@ -183,19 +184,25 @@ def process_batch_news_summarizer_story(k: str, v: Document):
     metadata.target = SUMMARY
     print(f"Summarized: {k}")
     client = ChromaDBClient()
-    client.collection_name = CRMADB.collection_name
+    if archive is None:
+        client.collection_name = CRMADB.collection_name
+    else:
+        client.collection_name = f"ap_news_{archive}"
     client.add_documents({doc_id: metadata})
 
 
-def batch_news_summarizer(documents: Dict[str, Document] = None):
+def batch_news_summarizer(documents: Dict[str, Document] = None, archive: str = None):
     """
     news_summarizer
     Summarizes multiple news articles concurrently using ProcessPoolExecutor.
     """
     if documents is None:
-        pikl_path = path("latest_news").replace(".txt", ".pkl")
+        pikl_path = path("latest_news", archive).replace(".txt", ".pkl")
         with open(pikl_path, "rb") as fh:
             documents = pickle.load(fh)
+
+    if archive is None:
+        archive = datetime.now().strftime(r"%Y-%m-%d")
 
     max_workers = 2
     print(f"\t   - {max_workers} workers\n")
@@ -203,7 +210,7 @@ def batch_news_summarizer(documents: Dict[str, Document] = None):
         max_workers=max_workers
     ) as executor:  # Use multiprocessing for efficiency
         futures = [
-            executor.submit(process_batch_news_summarizer_story, k, v)
+            executor.submit(process_batch_news_summarizer_story, k, v, archive)
             for k, v in documents.items()
         ]
         for future in futures:

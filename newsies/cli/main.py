@@ -39,9 +39,10 @@ def select_collection(
 
     if collection != prior_collection:
         print(f"\nStarting new Session with {collection}")
+        session = Session()
+        session.collection = collection
         new_chromadb_client = ChromaDBClient()
         new_chromadb_client.collection_name = collection
-        session = Session()
         return (session, new_chromadb_client)
     print(f"\n retaining session with {chromadb_client.collection_name}")
     return (None, chromadb_client)

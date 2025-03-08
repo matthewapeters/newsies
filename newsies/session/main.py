@@ -73,6 +73,8 @@ class Session:
         self._collection = c
 
     def _clone_last_turn(self, turn: Turn):
+        if len(self._history) == 0:
+            return
         last_turn: Turn = self._history[-1]
         turn.embedded_results = last_turn.embedded_results
         turn.summary_raw = last_turn.summary_raw

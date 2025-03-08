@@ -25,9 +25,13 @@ URL = "https://apnews.com"
 MAX_TRIES = 5
 
 
-def path(story_url: str):
+def path(story_url: str, archive: str = None):
     """path"""
-    today = datetime.now().strftime(r"%Y%m%d")
+    today = (
+        datetime.now().strftime(r"%Y%m%d")
+        if archive is None
+        else archive.replace("-", "")
+    )
     story = story_url.split("/")[-1].split("?")[0]
     os.makedirs(f"./daily_news/{today}", exist_ok=True)
     return f"./daily_news/{today}/{story}.txt"
