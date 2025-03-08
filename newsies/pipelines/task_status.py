@@ -2,9 +2,12 @@
 newsies.pipelines.task_status
 """
 
+import json
 from datetime import datetime
 import threading
 from typing import List, Dict, Union
+
+# pylint: disable=fixme
 
 
 class AppStatus(dict):
@@ -33,8 +36,10 @@ class AppStatus(dict):
         value["timestamp"] = now
 
         # write the status to the logfile
+        # TODO - add python logging
         with open("newsies.log", "a", encoding="utf8") as log:
-            log.write(f"INFO:\t{now}\tTASK STATUS\t{key}\t{value}")
+            status_record = json.dumps({"task_id": key, **value})
+            log.write(f"INFO:\t{status_record}\n")
 
         super().__setitem__(key, value)  # store the status record
 

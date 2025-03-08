@@ -90,8 +90,8 @@ async def run_get_news_pipeline(
     username = request.cookies[USER_COOKIE_NAME]
     sess = request.cookies[SESSION_COOKIE_NAME]
     TASK_STATUS[task_id] = {
-        "status": "queued",
         "session_id": sess,
+        "status": "queued",
         "task": "get-news",
         "username": username,
     }
@@ -114,9 +114,12 @@ async def run_analyze_pipeline(
     task_id = str(uuid.uuid4())
     username = request.cookies[USER_COOKIE_NAME]
     sess = request.cookies[SESSION_COOKIE_NAME]
+    if archive is None:
+        archive = datetime.now().strftime(r"%Y-%m-%d")
     TASK_STATUS[task_id] = {
-        "status": "queued",
+        "archive": archive,
         "session_id": sess,
+        "status": "queued",
         "task": "analyze",
         "username": username,
     }
