@@ -3,14 +3,15 @@ newsies.session
 """
 
 import json
-from typing import Any, Dict, List, Union
+from typing import Dict, List, Union
 import uuid
 
 from newsies.llm import LLM as llm
-from newsies.chromadb_client import ChromaDBClient
+from newsies.chromadb_client import ChromaDBClient, get_all_headlines
 from newsies.classify import prompt_analysis
 from newsies.session.turn import Turn
 from newsies import actions
+from newsies import targets
 
 # pylint: disable=broad-exception-caught, protected-access, unnecessary-lambda, too-many-instance-attributes, invalid-name
 
@@ -101,68 +102,85 @@ class Session:
         turn.paged_document_map = last_turn.paged_document_map
         turn.target_type = last_turn.target_type
 
-    def query(self, query: str) -> str:
+    def query(self, query: str = None, query_analysis: Dict = None) -> str:
         """query"""
         prompt = ""
-        query_analysis = prompt_analysis(query)
+        if query_analysis is None and query is not None:
+            query_analysis = prompt_analysis(query)
+
         turn = Turn(query=query, query_analysis=query_analysis)
         # results = None
         print(f"\n(newsies thinks you want to know about {query_analysis})\n")
         _archivedb = ChromaDBClient()
         _archivedb.collection_name = self._collection
-        match query_analysis["context"]:
-            case "NEW":
-                embedded_results = _archivedb.retrieve_documents(
-                    query,
-                    query_analysis,
-                    "text",
-                    qty_results=query_analysis["quantity"],
+        match [
+            query_analysis["context"],
+            query_analysis["target"],
+            query_analysis["quantity"],
+        ]:
+            # These scenarios refer to a new query
+            case ["NEW", targets.HEADLINE, "ALL"]:
+                headlines = get_all_headlines(
+                    self.collection, query_analysis["section"]
                 )
 
-                if len(embedded_results["ids"]) > 0:
-                    try:
-                        turn.embedded_results = embedded_results
+                output = {
+                    "section": query_analysis["section"],
+                    "headlines": headlines,
+                }
+                turn.paged_document_map = [{"0": output}]
+                self.add_history(turn)
+                return output
+            case ["NEW", targets.HEADLINE, "MANY"]:
+                headlines = get_all_headlines(
+                    self.collection, query_analysis["section"]
+                )
 
-                        summary_raw = _archivedb.collection.get(
-                            ids=embedded_results["ids"][0], include=["documents"]
-                        )
-                        turn.summary_raw = summary_raw
+                output = {
+                    "section": query_analysis["section"],
+                    "headlines": headlines,
+                }
+                turn.paged_document_map = [{"0": output}]
+                self.add_history(turn)
+                return output
+            case ["NEW", targets.HEADLINE, "ONE"]:
+                pass
+            case ["NEW", targets.DOCUMENT, "ALL"]:
+                pass
+            case ["NEW", targets.DOCUMENT, "MANY"]:
+                pass
+            case ["NEW", targets.DOCUMENT, "ONE"]:
+                pass
+            case ["NEW", targets.SUMMARY, "ALL"]:
+                pass
+            case ["NEW", targets.SUMMARY, "MANY"]:
+                pass
+            case ["NEW", targets.SUMMARY, "ONE"]:
+                pass
 
-                        summaries = {
-                            summary_raw["ids"][i]: summary_raw["documents"][i]
-                            for i in range(len(summary_raw["ids"]))
-                        }
-
-                        turn.summaries = summaries
-                    except Exception as e:
-                        print(f"ERROR: {e}")
-                        print("Try re-phrasing the question")
-                        return
-                else:
-                    self._clone_last_turn(turn)
+            # These scenarios refer to a prior query
+            case ["OLD", targets.HEADLINE, "ALL"]:
+                pass
+            case ["OLD", targets.HEADLINE, "MANY"]:
+                pass
+            case ["OLD", targets.HEADLINE, "ONE"]:
+                pass
+            case ["OLD", targets.DOCUMENT, "ALL"]:
+                pass
+            case ["OLD", targets.DOCUMENT, "MANY"]:
+                pass
+            case ["OLD", targets.DOCUMENT, "ONE"]:
+                pass
+            case ["OLD", targets.SUMMARY, "ALL"]:
+                pass
+            case ["OLD", targets.SUMMARY, "MANY"]:
+                pass
+            case ["OLD", targets.SUMMARY, "ONE"]:
+                pass
             case _:
-                self._clone_last_turn(turn)
-                match query_analysis["action"]:
-                    case actions.READ:
-                        # is there an ordinal reference?
-                        ordinal = query_analysis["ordinal"][0]
-                        target = query_analysis["target"]
-                        turn.do_read(
-                            ordinal=ordinal, target=target, archivedb=_archivedb
-                        )
-                        self.add(turn)
-                        return turn.response
-                    case actions.LIST:
-                        pass
-                    case actions.SUMMARIZE:
-                        pass
-                    case actions.SYNTHESIZE:
-                        pass
+                pass
 
         prompt: str = turn.get_prompt()
-        print(f"\nPROMPT:\n{prompt}\n-----------------------------------------\n")
-
         turn.response = llm.generate(prompt)
-        print("\nRESPONSE:\n", turn.response)
         self.add(turn)
         return turn.response

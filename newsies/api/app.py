@@ -9,6 +9,8 @@ import uuid
 from datetime import datetime
 from functools import wraps
 
+from pydantic import BaseModel
+
 from fastapi import FastAPI, BackgroundTasks, Request, HTTPException, Path, APIRouter
 from fastapi.responses import RedirectResponse
 from newsies.redis_client import cache_session, get_session
@@ -16,7 +18,7 @@ from newsies.pipelines import TASK_STATUS, LOCK
 from newsies.ap_news.sections import SECTIONS
 from newsies.chromadb_client import ChromaDBClient, collections
 from newsies.targets import HEADLINE
-from newsies.session import Session, Turn
+from newsies.session import Session
 from newsies.session.init_session import init_session
 
 # pylint: disable=import-outside-toplevel, broad-exception-caught, unused-argument, protected-access
@@ -190,42 +192,14 @@ async def list_headlines(
     """
     sessid = request.cookies[SESSION_COOKIE_NAME]
     session: Session = get_session(sessid)
-    # NOTE: a lot of this should be moved to Session.query()
-    client = ChromaDBClient()
-    client.collection_name = (
-        session.collection or f"ap_news_{datetime.now().strftime(r'%Y-%m-%d')}"
-    )
-
-    resp = client.collection.get(
-        where={
-            "$and": [
-                {"target": {"$eq": HEADLINE}},
-                {
-                    "$or": [
-                        {"section0": {"$eq": section}},
-                        {"section1": {"$eq": section}},
-                        {"section2": {"$eq": section}},
-                    ]
-                },
-            ]
-        }
-    )
-    headlines: Dict[str] = list(
-        {h.strip().replace("‘", "'").replace("’", "'") for h in resp["documents"]}
-    )
-    headlines = sorted(headlines)
-
-    output = {
+    qa = {
+        "context": "NEW",
+        "target": HEADLINE,
         "section": section,
-        "headlines": headlines,
+        "quantity": "ALL",
     }
-    turn = Turn(
-        query_analysis={"target": HEADLINE, "section": section, "quantity": "ALL"}
-    )
-    turn.paged_document_map = [{"0": output}]
-    session.add_history(turn)
+    output = session.query(query_analysys=qa)
     cache_session(session)
-
     return output
 
 
@@ -292,6 +266,24 @@ async def dump_session(request: Request):
     session_id = request.cookies[SESSION_COOKIE_NAME]
     s = get_session(session_id)
     return s.dump()
+
+
+class Prompt(BaseModel):
+    """
+    Prompt
+    """
+
+    prompt: str
+
+
+@router_v1.post("/prompt")
+async def post_prompt(request: Request, user_prompt: Prompt):
+    """post_prompt"""
+    session_id = request.cookies[SESSION_COOKIE_NAME]
+    session = get_session(session_id)
+    response = session.query(user_prompt.prompt)
+    cache_session(session)
+    return response
 
 
 app.include_router(router_v1, prefix="/v1")
