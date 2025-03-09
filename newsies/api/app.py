@@ -190,6 +190,7 @@ async def list_headlines(
     """
     sessid = request.cookies[SESSION_COOKIE_NAME]
     session: Session = get_session(sessid)
+    # NOTE: a lot of this should be moved to Session.query()
     client = ChromaDBClient()
     client.collection_name = (
         session.collection or f"ap_news_{datetime.now().strftime(r'%Y-%m-%d')}"
@@ -218,8 +219,10 @@ async def list_headlines(
         "section": section,
         "headlines": headlines,
     }
-    turn = Turn()
-    turn._paged_document_map = [{"0": output}]
+    turn = Turn(
+        query_analysis={"target": HEADLINE, "section": section, "quantity": "ALL"}
+    )
+    turn.paged_document_map = [{"0": output}]
     session.add_history(turn)
     cache_session(session)
 

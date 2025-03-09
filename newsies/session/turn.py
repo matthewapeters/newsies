@@ -33,46 +33,21 @@ def paginate_dict(large_dict: Dict, page_size: int = 100) -> List[Dict]:
 class Turn:
     """Turn"""
 
-    def __init__(self, query: str = "", query_analysis: dict = None):
-        self.query = query
-        self.query_analysis = query_analysis or {}
-        self._embedded_results = None
-        self._summary_raw = None
-        self._summaries = None
-        self._prompt = None
-        self._response = None
-        self._result_count = 0
+    def __init__(self, **kwargs):
+        self.query: str = kwargs.get("query", "")
+        self.query_analysis: Dict[str, str] = kwargs.get("query_analysis", {})
+        self.embedded_results = kwargs.get("embedded_results")
+        self.summary_raw = kwargs.get("summary_raw")
+        self.summaries: List[str] = kwargs.get("summaries")
+        self.prompt: str = kwargs.get("prompt")
+        self.response: str = kwargs.get("response")
+        self.result_count: int = kwargs.get("result_count", 0)
         # target_type describes what is stored in the paged_document_map
-        self.target_type: str = query_analysis["target"]
-        self._paged_document_map: List[Dict] = None
-        self.current_page = 0
-
-    @property
-    def embedded_results(self):
-        """embedded_results"""
-        return self._embedded_results
-
-    @embedded_results.setter
-    def embedded_results(self, er):
-        self._embedded_results = er
-
-    @property
-    def summary_raw(self):
-        """summary_raw"""
-        return self._summary_raw
-
-    @summary_raw.setter
-    def summary_raw(self, sr):
-        self._summary_raw = sr
-
-    @property
-    def summaries(self):
-        """summaries"""
-        return self._summaries
-
-    @summaries.setter
-    def summaries(self, s):
-        self._summaries = s
+        self.target_type: str = kwargs.get("target_type") or self.query_analysis.get(
+            "target"
+        )
+        self.paged_document_map: List[Dict] = kwargs.get("paged_document_map")
+        self.current_page = kwargs.get("current_page", 0)
 
     def do_synthesize(
         self, include_summaries: bool = True, include_uri: bool = True
@@ -103,14 +78,14 @@ class Turn:
             "" if self.response is None else f"Agent Last Response: {self.response}\n"
         )
 
-        self._prompt = (
+        self.prompt = (
             f"Context: {{\n{context}\n}}\nUser Question: {self.query}\nAgent Answer:"
         )
 
-        if len(self._prompt) > 2048 and include_summaries:
+        if len(self.get_prompt) > 2048 and include_summaries:
             print("\nremoving summaries from context\n")
             self.do_synthesize(include_summaries=False)
-        if len(self._prompt) > 2048 and include_uri:
+        if len(self.get_prompt) > 2048 and include_uri:
             print("\nremoving uris from context\n")
             self.do_synthesize(include_summaries=False, include_uri=False)
 
@@ -136,7 +111,7 @@ class Turn:
         match target:
             case targets.DOCUMENT:
                 uri = list(
-                    self._paged_document_map[self.current_page][doc_map_idx].keys()
+                    self.paged_document_map[self.current_page][doc_map_idx].keys()
                 )[0]
                 with open(uri, "r", encoding="utf8") as fh:
                     self.response = fh.read()
@@ -145,7 +120,7 @@ class Turn:
                 # if the context target is not summary, retrieve the summary for the corresponding
                 # document
                 uri = list(
-                    self._paged_document_map[self.current_page][doc_map_idx].keys()
+                    self.paged_document_map[self.current_page][doc_map_idx].keys()
                 )[0]
                 if self.target_type != target:
                     self.response = archivedb.collection.get(ids=[], where={})
@@ -188,23 +163,23 @@ class Turn:
                     seen.append(hs[0])
                     i += 1
 
-        self._result_count = len(clean_map)
-        self._paged_document_map = paginate_dict(clean_map, 5)
+        self.result_count = len(clean_map)
+        self.paged_document_map = paginate_dict(clean_map, 5)
 
     def do_list_headlines(self) -> str:
         """list_headlines"""
         context = ""
-        if self._paged_document_map is None or len(self._paged_document_map) == 0:
+        if self.paged_document_map is None or len(self.paged_document_map) == 0:
             self._prep_headline_maps()
 
         # get the current page (default is first page)
-        page = self._paged_document_map[self.current_page]
+        page = self.paged_document_map[self.current_page]
         context = (
             f"[{self.query_analysis["quantity"]} story[s] "
             f"from section: `{self.query_analysis["section"]}` "
-            f"gives {self._result_count} documents. "
+            f"gives {self.result_count} documents. "
             f"Showing {len(page)} from page {self.current_page + 1}/"
-            f"{len(self._paged_document_map)}.]\n"
+            f"{len(self.paged_document_map)}.]\n"
         )
         for uri_map, document in page.items():
             # the document is a map of uri to shortest headline
@@ -214,10 +189,10 @@ class Turn:
             "" if self.response is None else f"Previous Response: {self.response}\n"
         )
 
-        self._prompt = f"Context:\n{context}\nUser Question: {self.query}"
+        self.prompt = f"Context:\n{context}\nUser Question: {self.query}"
 
-    def prompt(self) -> str:
-        """prompt"""
+    def get_prompt(self) -> str:
+        """get_prompt"""
         action: str = self.query_analysis["action"]
         match action:
             case actions.READ:
@@ -229,13 +204,4 @@ class Turn:
             case actions.LIST:
                 self.do_list_headlines()
 
-        return self._prompt
-
-    @property
-    def response(self):
-        """response"""
-        return self._response
-
-    @response.setter
-    def response(self, r):
-        self._response = r
+        return self.prompt

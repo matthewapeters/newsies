@@ -16,7 +16,7 @@ def cache_session(session: Session):
     """
     cache_session
     """
-    REDIS.set(session.id, session.dumps())
+    REDIS.set(session.id, session.toJson())
 
 
 def get_session(session_id: str):

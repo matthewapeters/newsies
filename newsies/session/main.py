@@ -12,7 +12,7 @@ from newsies.classify import prompt_analysis
 from newsies.session.turn import Turn
 from newsies import actions
 
-# pylint: disable=broad-exception-caught, protected-access, unnecessary-lambda, too-many-instance-attributes
+# pylint: disable=broad-exception-caught, protected-access, unnecessary-lambda, too-many-instance-attributes, invalid-name
 
 
 class Session:
@@ -22,14 +22,23 @@ class Session:
 
     def __init__(self, **kwargs):
         self.id: str = kwargs.get("id", str(uuid.uuid4()))
-        self._history: List = kwargs.get("history", [])
+        h = kwargs.get("history")
+        history = None
+        match str(type(h)):
+            case "<class 'str'>":
+                history = [Turn(**i) for i in json.loads(h) if isinstance(i, dict)]
+            case "<class 'list'>":
+                history = [Turn(**i) for i in h if isinstance(i, dict)]
+            case _:
+                history = []
+        self._history: List[Turn] = history
         self._context: Dict = kwargs.get("context", {})
         self._username: str = kwargs.get("username")
         self._collection: str = kwargs.get("collection")
 
-    def dumps(self):
+    def toJson(self):
         """
-        dumps
+        toJson
             returns a JSON string of the session
             Used in caching
         """
@@ -42,7 +51,7 @@ class Session:
         """
         return {
             "id": self.id,
-            "history": self._history,
+            "history": [t.__dict__ for t in self._history],
             "context": self._context,
             "username": self._username,
             "collection": self._collection,
@@ -89,14 +98,14 @@ class Session:
         turn.summary_raw = last_turn.summary_raw
         turn.summaries = last_turn.summaries
         turn.response = last_turn.response
-        turn._paged_document_map = last_turn._paged_document_map
+        turn.paged_document_map = last_turn.paged_document_map
         turn.target_type = last_turn.target_type
 
     def query(self, query: str) -> str:
         """query"""
         prompt = ""
         query_analysis = prompt_analysis(query)
-        turn = Turn(query, query_analysis)
+        turn = Turn(query=query, query_analysis=query_analysis)
         # results = None
         print(f"\n(newsies thinks you want to know about {query_analysis})\n")
         _archivedb = ChromaDBClient()
@@ -150,7 +159,7 @@ class Session:
                     case actions.SYNTHESIZE:
                         pass
 
-        prompt: str = turn.prompt()
+        prompt: str = turn.get_prompt()
         print(f"\nPROMPT:\n{prompt}\n-----------------------------------------\n")
 
         turn.response = llm.generate(prompt)
