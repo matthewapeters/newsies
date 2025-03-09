@@ -198,7 +198,7 @@ async def list_headlines(
         "section": section,
         "quantity": "ALL",
     }
-    output = session.query(query_analysys=qa)
+    output = session.query(query_analysis=qa)
     cache_session(session)
     return output
 
