@@ -56,7 +56,7 @@ logo(){
 
 
 case $flag in
-    start)
+    up)
         echo "Starting ChromaDB and Redis"
         export CHROMADB_ENCRYPTED_CREDS=`docker run --rm --entrypoint htpasswd httpd:2 -Bbn $CHROMADB_USER $chromadb_password`
         echo "
@@ -73,7 +73,7 @@ CHROMA_SERVER_AUTHN_CREDENTIALS='${CHROMADB_ENCRYPTED_CREDS}'
         docker compose up -d --remove-orphans
         popd &>/dev/null
         ;;
-    stop)
+    down)
         echo "Stopping ChromaDB and Redis"
         pushd docker &>/dev/null
         docker compose down
@@ -155,12 +155,13 @@ CHROMA_SERVER_AUTHN_CREDENTIALS='${CHROMADB_ENCRYPTED_CREDS}'
         echo Newsies Usage
         echo
         echo "Usage: newsies [routine]"
+	echo
         echo "CLI Commands"
         echo -e "\tget-news"
         echo -e "\tanalyze"
         echo -e "\tcli"
-        echo -e "\tstart"
-        echo -e "\tstop"
+        echo -e "\tup"
+        echo -e "\tdown"
         echo -e "\tchroma-stats"
         echo -e "\tchroma-logs"
         echo "--------------"

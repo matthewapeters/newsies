@@ -107,7 +107,7 @@ class ChromaDBClient:
         document_ids: Union[List[str], str],
         docs: Union[List[str], str],
         embeddings: Union[List[float], float] = None,
-        metadata: Union[List[str], str] = None,
+        metadatas: Union[List[str], str] = None,
         uris: Union[List[str], str] = None,
     ):
         """
@@ -126,8 +126,8 @@ class ChromaDBClient:
         }
         if uris is not None:
             params["uris"] = uris[lower:upper]
-        if metadata is not None:
-            params["metadatas"] = metadata[lower:upper]
+        if metadatas is not None:
+            params["metadatas"] = metadatas[lower:upper]
 
             self.collection.upsert(**params)
 
@@ -135,7 +135,7 @@ class ChromaDBClient:
         self,
         document_ids: Union[List[str], str],
         docs: Union[List[str], str],
-        metadata: Union[List[str], str] = None,
+        metadatas: Union[List[str], str] = None,
         uris: Union[List[str], str] = None,
     ):
         """
@@ -151,17 +151,23 @@ class ChromaDBClient:
                 for j, chunk in enumerate(chunks):
                     if j == 0:
                         docs[i] = chunk
-                        if metadata is not None:
-                            metadata[i].update({ci: 0, "text": chunk})
+                        if metadatas is not None:
+                            m = {**metadatas[i]}
+                            m[ci] = 0
+                            m["text"] = chunk
+                            metadatas[i] = m
                     else:
                         if uris is not None:
                             uris.append(uris[i] + f"_{j}")
                         docs.append(chunk)
                         document_ids.append(f"{document_ids[i]}_{j}")
-                        if metadata is not None:
-                            metadata.append({ci: j, "text": chunk, **metadata[i]})
+                        if metadatas is not None:
+                            m = {**metadatas[i]}
+                            m[ci] = j
+                            m["text"] = chunk
+                            metadatas.append(m)
             else:
-                metadata[i].update({ci: 0})
+                metadatas[i].update({ci: 0})
 
         # Encode the documents and add the embedding model to the metadata
         embeddings = self._embed_model.encode(docs).tolist()
@@ -173,8 +179,8 @@ class ChromaDBClient:
         }
         if uris is not None:
             params["uris"] = uris
-        if metadata is not None:
-            params["metadata"] = metadata
+        if metadatas is not None:
+            params["metadata"] = metadatas
 
         self._upsert(**params)
 
@@ -243,7 +249,7 @@ class ChromaDBClient:
             document_ids=doc_ids,
             docs=docs,
             uris=uris,
-            metadata=metadata,
+            metadatas=metadata,
         )
 
     def retrieve_documents(

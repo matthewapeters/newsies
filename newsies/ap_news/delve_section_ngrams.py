@@ -24,6 +24,7 @@ from newsies.chromadb_client import ChromaDBClient
 from newsies.chroma_client import CRMADB
 from newsies.document_structures import Document
 from newsies.collections import TAGS
+from newsies import targets
 
 # pylint: disable=broad-exception-caught
 
@@ -358,3 +359,28 @@ def get_section_doc_counts():
         section_counts[section] = len(result["ids"])
 
     return section_counts
+
+
+def generate_named_entity_embeddings_for_stories(client: ChromaDBClient):
+    """
+    generate_named_entity_embeddings_for_stories
+    """
+    story_ids = client.collection.get(
+        include=[], where={"target": {"$eq": targets.DOCUMENT}}
+    )["ids"]
+    story_count = len(story_ids)
+    batch_size = 200
+    for i in range(0, story_count, batch_size):
+        ids = story_ids[i : min(i + batch_size, story_count)]
+        batch = client.collection.get(ids=ids, include=["documents", "embeddings"])
+        embed_map = {
+            batch["ids"][idx]: (batch.get("embeddings", [None])[idx] or [])
+            + [
+                embedding_model.encode(ne)
+                for ne in list(
+                    detect_named_entities(nlp(batch["documents"][idx])).keys()
+                )
+            ]
+            for idx in range(len(batch["ids"]))
+        }
+        client.collection.update(ids=embed_map.keys(), embeddings=embed_map.values())
