@@ -132,6 +132,7 @@ class Session:
                 self.add_history(turn)
                 return output
             case ["NEW", targets.HEADLINE, "MANY"]:
+                # as opposed to all - are these paged or filtered somehow
                 headlines = get_all_headlines(
                     self.collection, query_analysis["section"]
                 )
@@ -144,6 +145,7 @@ class Session:
                 self.add_history(turn)
                 return output
             case ["NEW", targets.HEADLINE, "ONE"]:
+                # how can we ask a new query about a headline we know nothing about?
                 pass
             case ["NEW", targets.DOCUMENT, "ALL"]:
                 pass
