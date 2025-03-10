@@ -12,4 +12,8 @@ from .latest_news import (
     news_loader,
 )
 from .sections import SECTIONS
-from .delve_section_ngrams import analyze_ngrams_per_section, compute_tfidf
+from .delve_section_ngrams import (
+    analyze_ngrams_per_section,
+    compute_tfidf,
+    generate_named_entity_embeddings_for_stories,
+)

@@ -180,7 +180,7 @@ class ChromaDBClient:
         if uris is not None:
             params["uris"] = uris
         if metadatas is not None:
-            params["metadata"] = metadatas
+            params["metadatas"] = metadatas
 
         self._upsert(**params)
 

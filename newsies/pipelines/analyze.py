@@ -3,11 +3,13 @@ newsies.pipelines.analyze
 """
 
 from datetime import datetime
+from newsies import targets
 
 from newsies.ap_news import (
     batch_news_summarizer,
     analyze_ngrams_per_section,
     compute_tfidf,
+    generate_named_entity_embeddings_for_stories,
 )
 from .task_status import TASK_STATUS
 
@@ -26,9 +28,23 @@ def analyze_pipeline(task_id: str, archive: str = None):
         archive = datetime.now().strftime(r"%Y-%m-%d")
     TASK_STATUS[task_id] = "start"
     try:
+        print("\n\t- embed named-entities in stories")
+        generate_named_entity_embeddings_for_stories(
+            archive=archive, target=targets.DOCUMENT
+        )
+        print("\n\t- embed named entities for headlines")
+        generate_named_entity_embeddings_for_stories(
+            archive=archive, target=targets.HEADLINE
+        )
+
         print("\n\t- summarizing stories")
         TASK_STATUS[task_id] = "running - step: summarizing stories"
         batch_news_summarizer(archive=archive)
+
+        print("\n\t- embed named entities for summaries")
+        generate_named_entity_embeddings_for_stories(
+            archive=archive, target=targets.SUMMARY
+        )
 
         print("\n\t- detecting ngrams specific to news sections\n")
         TASK_STATUS[task_id] = "running - step: extracing named entities and n-grams"

@@ -361,20 +361,22 @@ def get_section_doc_counts():
     return section_counts
 
 
-def generate_named_entity_embeddings_for_stories(client: ChromaDBClient):
+def generate_named_entity_embeddings_for_stories(archive: str, target: str):
     """
     generate_named_entity_embeddings_for_stories
     """
-    story_ids = client.collection.get(
-        include=[], where={"target": {"$eq": targets.DOCUMENT}}
-    )["ids"]
+    client = ChromaDBClient()
+    client.collection_name = archive
+    story_ids = client.collection.get(include=[], where={"target": {"$eq": target}})[
+        "ids"
+    ]
     story_count = len(story_ids)
     batch_size = 200
     for i in range(0, story_count, batch_size):
         ids = story_ids[i : min(i + batch_size, story_count)]
         batch = client.collection.get(ids=ids, include=["documents", "embeddings"])
         embed_map = {
-            batch["ids"][idx]: (batch.get("embeddings", [None])[idx] or [])
+            batch["ids"][idx]: (batch.get("embeddings", [None] * (idx + 1))[idx] or [])
             + [
                 embedding_model.encode(ne)
                 for ne in list(
