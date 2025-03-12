@@ -371,7 +371,7 @@ def generate_named_entity_embeddings_for_stories(archive: str, target: str):
         "ids"
     ]
     story_count = len(story_ids)
-    batch_size = 200
+    batch_size = 100
     for i in range(0, story_count, batch_size):
         ids = story_ids[i : min(i + batch_size, story_count)]
         batch = client.collection.get(ids=ids, include=["documents", "embeddings"])

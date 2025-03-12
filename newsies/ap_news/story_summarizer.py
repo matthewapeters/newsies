@@ -174,7 +174,13 @@ def summarize_story(uri: str, chroma_client, doc_id: str = None, max_tokens: int
     return " ".join(final_summaries)
 
 
-def process_batch_news_summarizer_story(k: str, v: Document, archive: str = None):
+def process_batch_news_summarizer_story(
+    k: str,
+    v: Document,
+    archive: str = None,
+    item_no: int = 1,
+    total_items: int = 1,
+):
     """
     process_story
     """
@@ -182,13 +188,13 @@ def process_batch_news_summarizer_story(k: str, v: Document, archive: str = None
     metadata = Document(**v.dump())
     metadata.text = summarize_story(v.uri, CRMADB, doc_id)
     metadata.target = SUMMARY
-    print(f"Summarized: {k}")
     client = ChromaDBClient()
     if archive is None:
         client.collection_name = CRMADB.collection_name
     else:
         client.collection_name = f"ap_news_{archive}"
     client.add_documents({doc_id: metadata})
+    print(f"summarized {doc_id} ({item_no}/{total_items})\n")
 
 
 def batch_news_summarizer(documents: Dict[str, Document] = None, archive: str = None):
@@ -210,8 +216,15 @@ def batch_news_summarizer(documents: Dict[str, Document] = None, archive: str = 
         max_workers=max_workers
     ) as executor:  # Use multiprocessing for efficiency
         futures = [
-            executor.submit(process_batch_news_summarizer_story, k, v, archive)
-            for k, v in documents.items()
+            executor.submit(
+                process_batch_news_summarizer_story,
+                kv[0],
+                kv[1],
+                archive,
+                i + 1,
+                len(documents),
+            )
+            for i, kv in enumerate(documents.items())
         ]
         for future in futures:
             future.result()  # Ensures all tasks complete before exiting

@@ -4,6 +4,7 @@ newsies.chromadb.client
 
 import os
 from typing import Dict, List, Union
+from datetime import datetime
 
 import chromadb
 from chromadb.config import Settings
@@ -233,6 +234,9 @@ class ChromaDBClient:
                     else "N/A"
                 )
             metadata[i].pop("sections")
+
+            # add the archive date (used for selective retrieval)
+            metadata[i]["archive_date"] = datetime.now().strftime(r"%Y-%m-%d")
 
             # add up to three headlines in the metadata for each document
             for headline_nbr in range(3):
