@@ -5,6 +5,7 @@ newsies.ap_news.latest_news
 from datetime import datetime
 import time
 import os
+import re
 from typing import Dict
 from random import randint
 from multiprocessing import Pool
@@ -167,7 +168,12 @@ def download_article(
                     for paragraph in article.find(
                         class_="RichTextStoryBody RichTextBody"
                     ).find_all("p"):
-                        fh.write(f"{paragraph.text}\n")
+                        p = paragraph.text
+                        # replace unicode quotes and quote-like characters with apostrophe
+                        # https://hexdocs.pm/ex_unicode/Unicode.Category.QuoteMarks.html
+                        p = re.sub(r"[\u0018-\u2E42]", "'", p)
+                        p += "\n"
+                        fh.write(p)
                 except AttributeError:
                     fh.write("Error parsing article\n")
         case _:
