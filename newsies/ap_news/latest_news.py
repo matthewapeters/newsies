@@ -112,6 +112,10 @@ def download_article(
     work: tuple,
     backoff: int = 0,
     tries: int = 0,
+    task_status: dict = None,
+    task_id: str = "",
+    doc_id: int = 0,
+    doc_count: int = 0,
 ):
     """
     download_article
@@ -134,6 +138,10 @@ def download_article(
         sections: List[str] - a list of sections for the story
     :param backoff: int - the number of seconds to wait before retrying
     :param tries: int - the number of times this function has been called
+    :param task_status: dict - pipeline task status dict
+    :param task_id: str - pipeline task id
+    :param doc_id: int - enumeration index of the current document
+    :param doc_count: int - total count of documents in the task
     """
 
     story_url, headlines, sections = work
@@ -174,13 +182,19 @@ def download_article(
                         p = re.sub(r"[\u0018-\u2E42]", "'", p)
                         p += "\n"
                         fh.write(p)
+                    if task_status is not None:
+                        task_status[task_id] = (
+                            f"running: downloaded {doc_id} of {doc_count}"
+                        )
                 except AttributeError:
                     fh.write("Error parsing article\n")
         case _:
             print(f"Error getting article: {article_resp.status_code}")
 
 
-def news_loader(documents: Dict[str, Document] = None):
+def news_loader(
+    documents: Dict[str, Document] = None, task_state: dict = None, task_id: str = ""
+):
     """
     news_loader:
       - Load news articles
@@ -190,19 +204,30 @@ def news_loader(documents: Dict[str, Document] = None):
         with open(pikl_path, "rb") as fh:
             documents = pickle.load(fh)
 
+    docs_count = len(documents)
     with Pool(processes=4) as ppool:
         ppool.map(
             download_article,
-            [(v.url, v.headlines, v.sections) for v in documents.values()],
+            [
+                (v.url, v.headlines, v.sections, task_state, task_id, i, docs_count)
+                for i, v in enumerate(documents.values())
+            ],
         )
 
     CRMADB.add_documents(documents)
 
 
-def headline_loader(documents: Dict[str, Document] = None):
+def headline_loader(
+    documents: Dict[str, Document] = None, task_state: dict = None, task_id: str = ""
+):
     """
     headline_loader
+    :param documents: dict
+    :param task_state: dict - pipeline task status
+    :param task_id: str - pipeline task id
     """
+    if task_state is not None:
+        task_state[task_id] = f"runinng - loading {len(documents)} headlines"
     if documents is None:
         pikl_path = path("latest_news").replace(".txt", ".pkl")
         with open(pikl_path, "rb") as fh:
@@ -218,3 +243,5 @@ def headline_loader(documents: Dict[str, Document] = None):
             headlines[f"{doc_id}_hl{headline_idx}"] = h_doc
 
     CRMADB.add_documents(headlines)
+    if task_state is not None:
+        task_state[task_id] = f"runinng - {len(documents)} headlines loaded"
