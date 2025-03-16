@@ -19,7 +19,7 @@ from transformers import (
 import torch
 from peft import LoraConfig, get_peft_model
 from datasets import Dataset
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 import spacy
 import pandas as pd
 
@@ -46,13 +46,62 @@ def fetch_news_data(collection_name: str = "ap_news_2025-03-12"):
 # Step 2: Generate Question-Answer Pairs using an LLM
 def extract_named_entities(text):
     """extract_named_entities"""
+
+    # Label	Description
+    #
+    # PERSON	Named persons (e.g., Albert Einstein)
+    # ORG	Organizations, companies, agencies (e.g., Apple, CIA)
+    # GPE	Countries, cities, states (e.g., France, New York)
+    # LOC	Non-GPE locations, like mountains, rivers (e.g., Everest, Amazon River)
+    # FAC	Facilities (e.g., Empire State Building, Golden Gate Bridge)
+    # NORP	Nationalities, religious or political groups (e.g., American, Buddhist, Republican)
+    # DATE	Absolute/relative dates or periods (e.g., June 20, 1990, next week)
+    # TIME	Times of the day (e.g., 2:30 PM, midnight)
+    # MONEY	Monetary values (e.g., $10, 500 euros)
+    # PERCENT	Percentage expressions (e.g., 10% increase)
+    # CARDINAL	Numbers that do not fall into other categories (e.g., one, 200 million)
+    # ORDINAL	Rankings (e.g., first, 2nd place)
+    # QUANTITY	Measurements (e.g., 3kg, 5 miles)
+    # PRODUCT	Objects, vehicles, food, etc. (e.g., iPhone, Boeing 747)
+    # EVENT	Named events (e.g., World War II, Super Bowl)
+    # LAW	Named laws, treaties, regulations (e.g., First Amendment, GDPR)
+    # WORK_OF_ART	Titles of books, songs, movies (e.g., The Great Gatsby, Star Wars)
+    # LANGUAGE	Any named language (e.g., French, Python)
+
+    relevant_labels = {
+        "EVENT",
+        "FAC",
+        "GPE",
+        "LAW",
+        "LOC",
+        "NORP",
+        "ORG",
+        "PERSON",
+        "PRODUCT",
+        "WORK_OF_ART",
+    }
+
     # Load spaCy model for Named Entity Recognition (NER)
     nlp = spacy.load("en_core_web_sm")
     doc = nlp(text)
-    entities = list(
-        set(ent.text for ent in doc.ents if ent.label_ in {"PERSON", "ORG", "GPE"})
-    )
+    entities = list(set(ent.text for ent in doc.ents if ent.label_ in relevant_labels))
     return entities
+
+
+def extract_named_entities_batch(texts):
+    """Batch extract named entities using spaCy's efficient pipe processing"""
+    entities_list = []
+    nlp = spacy.load("en_core_web_sm")
+
+    for doc in nlp.pipe(
+        texts, batch_size=32, n_process=4
+    ):  # Batch and use multiprocessing
+        entities = {
+            ent.text for ent in doc.ents if ent.label_ in {"PERSON", "ORG", "GPE"}
+        }
+        entities_list.append(list(entities))  # Convert set to list
+
+    return entities_list
 
 
 def save_debug_output(prompt, results):
@@ -79,12 +128,81 @@ def load_qa_from_parquet(file_path):
     return df.to_dict(orient="records")
 
 
-def generate_qa_pairs2(batch_size=1000):
+def generate_qa_pairs(batch_size=1000, number_of_questions: int = 3):
     """
     generate qa_pairs2
     """
 
     news_docs, news_metadata = fetch_news_data()
+    df = pd.DataFrame(
+        {
+            "doc": news_docs,
+            "uri": [meta["uri"] for meta in news_metadata],
+            "section0": [meta["section0"] or "front-page" for meta in news_metadata],
+            "headline0": [meta["headline0"] for meta in news_metadata],
+            "section1": [meta["section1"] for meta in news_metadata],
+            "headline1": [meta["headline1"] for meta in news_metadata],
+            "section2": [meta["section2"] for meta in news_metadata],
+            "headline2": [meta["headline2"] for meta in news_metadata],
+        }
+    )
+
+    # Apply batch NER processing
+    df["ne"] = extract_named_entities_batch(df["doc"].tolist())
+
+    df1 = df[(df["section1"] != "N/A") & (df["headline1"] != "N/A")]
+    df1 = df1.drop(["section0", "headline0"], axis=1)
+    df1 = df1.rename(columns={"section1": "section", "headline1": "headline"})
+
+    df2 = df1[(df1["section2"] != "N/A") & (df1["headline2"] != "N/A")]
+    df2 = df2.drop(["section", "headline"], axis=1)
+    df2 = df2.rename(columns={"section2": "section", "headline2": "headline"})
+
+    df = df.drop(["section1", "headline1", "section2", "headline2"], axis=1)
+    df = df.rename(columns={"section0": "section", "headline0": "headline"})
+    df1 = df1.drop(["section2", "headline2"], axis=1)
+    df = pd.concat([df, df1, df2], ignore_index=True, sort=False)
+
+    dfnoents = df[df["ne"].apply(len) == 0].copy()
+
+    dfne = df[df["ne"].apply(len) > 0].copy()
+    dfne = dfne.explode("ne")
+
+    # add prompt
+    dfnoents["prompt"] = dfnoents.apply(
+        lambda row: (
+            "Generate 3 different questions that a reader might ask about the "
+            "following news article. Focus on specific facts, key events, or "
+            "important themes in the article. The questions should be clear, "
+            "meaningful, and relevant to the article's details. The questions "
+            "should avoid generic inquiries. Ensure the question cannot be "
+            "answered without reading the article.\n"
+            f"news article: {row['doc']}"
+        ),
+        axis=1,
+    )
+
+    # add prompt
+    dfne["prompt"] = dfne.apply(
+        lambda row: (
+            f"Generate a question about '{row['ne']}' that requires knowledge "
+            "of the following news article. Focus on specific facts, key "
+            "events, or important themes in the article. The questions should be "
+            "clear, meaningful, and relevant to the article's details. The questions "
+            "should avoid generic inquiries. Ensure the question cannot be "
+            "answered without reading the article.\n"
+            f"news article: {row['doc']}"
+        ),
+        axis=1,
+    )
+
+    df = pd.concat([dfnoents, dfne], ignore_index=True, sort=False)
+    df = df.drop(["ne", "doc"], axis=1)
+    df["batch"] = df.index // batch_size
+    prompt_count = len(df)
+    batched_data = df.groupby("batch")
+    # reclaim memory ahead of
+    del df
 
     qa_generator = pipeline(
         "text2text-generation",
@@ -92,369 +210,54 @@ def generate_qa_pairs2(batch_size=1000):
         device=0 if torch.cuda.is_available() else -1,
     )
 
-    # Initialize the DataFrames for question and entity prompts
-    question_prompts = pd.DataFrame(
-        columns=["batch", "doc", "meta", "prompt", "answer"]
-    )
-    entity_prompts = pd.DataFrame(
-        columns=["batch", "doc", "meta", "entity", "prompt", "answer"]
-    )
-    print(datetime.now(), "start processing generated questions for training")
+    questions = []
+    # Run qa_generator on question_prompt_ds - this should be batched to batch_size
+    for batch, batch_data in tqdm(
+        batched_data,
+        desc=(
+            f"Generate {number_of_questions} questions for "
+            f"{prompt_count} prompts in batches of {batch_size}"
+        ),
+        position=0,
+    ):
 
-    for batch_start in range(0, len(news_docs), batch_size):
-        entity_idx = 0
-        batch_docs = news_docs[batch_start : batch_start + batch_size]
-        batch_meta = news_metadata[batch_start : batch_start + batch_size]
+        # Process the batch separately by extracting 'prompt' field
+        batch_prompts = batch_data["prompt"].tolist()
 
-        # Fill in question prompts and entity prompts
-        for doc, meta in zip(batch_docs, batch_meta):
-            context = (
-                f"'section': {meta['section0'] or 'front-page'}\t"
-                f"'headline':{meta['headline0']}\n"
-            )
-            if meta["section1"] != "N/A":
-                context += (
-                    f" 'section': {meta['section1']}\t'headline': {meta['headline1']}\n"
-                )
-            if meta["section2"] != "N/A":
-                context += (
-                    f" 'section': {meta['section2']}\t'headline': {meta['headline2']}\n"
-                )
-            context += f"'URI': {meta['uri']}\n"
-            context += f"'article': {doc}"
-
-            # Add question prompt for the document
-            question_prompt = (
-                "Generate 3 different questions that a reader might ask about the "
-                "following news article. Focus on specific facts, key events, or "
-                "important themes in the article. The questions should be clear, "
-                "meaningful, and relevant to the article's details. The questions "
-                "should avoid generic inquiries. Ensure the question cannot be "
-                "answered without reading the article.\n"
-                f"news article: {doc}"
-            )
-
-            answer = f"'URI'  {meta['uri']}\n"
-            for i in range(3):
-                if meta[f"section{i}"] != "N/A":
-                    answer += (
-                        f"'section' {meta[f"section{i}"] or "front-page"}\t"
-                        f"'headline' {meta[f'headline{i}']}\n"
-                    )
-
-            question_prompts.loc[len(question_prompts)] = {
-                "batch": f"{batch_start}",
-                "doc": doc,
-                "meta": meta,
-                "prompt": question_prompt,
-                "answer": answer,
-            }
-
-            # Entities can number an order of magnitude more than questions -
-            # so they have to be batched on their own
-            # Collect entities in the story
-            entities = [e for e in extract_named_entities(doc) if e != "AP"]
-            for entity in entities:
-                entity_prompt = (
-                    f"Generate a question about '{entity}' that requires knowledge "
-                    "of the following news article. Focus on specific facts, key "
-                    "events, or important themes in the article. The questions should be "
-                    "clear, meaningful, and relevant to the article's details. The questions "
-                    "should avoid generic inquiries. Ensure the question cannot be "
-                    "answered without reading the article.\n"
-                    f"news article: {doc}"
-                )
-
-                answer = f"'URI'  {meta['uri']}\n"
-                for i in range(3):
-                    if meta[f"section{i}"] != "N/A":
-                        answer += (
-                            f"'section' {meta[f"section{i}"] or "front-page"}\t"
-                            f"'headline' {meta[f'headline{i}']}\n"
-                        )
-
-                entity_prompts.loc[len(entity_prompts)] = {
-                    "batch": f"{batch_start}-{entity_idx // batch_size }",
-                    "doc": doc,
-                    "meta": meta,
-                    "entity": entity,
-                    "prompt": entity_prompt,
-                    "answer": answer,
-                }
-                entity_idx += 1
-
-        # At this point, question_prompts and entity_prompts have been built.
-        # Use the 'batch' field to group the data by batch for efficient processing
-
-        # Group question_prompts by the 'batch' field
-        question_prompts_grouped = question_prompts.groupby("batch")
-        entity_prompts_grouped = entity_prompts.groupby("batch")
-
-        questions = []
-        # Run qa_generator on question_prompt_ds - this should be batched to batch_size
-        for batch, batch_data in tqdm(
-            question_prompts_grouped,
-            desc="Generating questions for question prompts",
-            position=0,
-        ):
-
-            # Process the batch separately by extracting 'prompt' field
-            batch_prompts = batch_data["prompt"].tolist()
-
-            # Call qa_generate with the batch of prompts
-            batch_questions = qa_generator(
-                batch_prompts, max_length=50, truncation=True
-            )
-            batch_questions = [
+        # Call qa_generate with the batch of prompts
+        batch_questions = qa_generator(
+            batch_prompts,
+            max_length=100,
+            truncation=True,
+            num_return_sequences=number_of_questions,
+            do_sample=True,  # Introduce randomness for variation
+            temperature=0.7,  # Adjust temperature for diversity
+            top_p=0.9,  # Nucleus sampling for more natural responses)
+        )
+        batch_questions = [
+            [
                 (
                     "for the next question, return the 'section', "
                     "the 'headline', and the 'URI'\n"
-                    f"question: '{q}'"
+                    f"question: '{v}'"
                 )
-                for q in batch_questions
+                for d in qs
+                for v in d.values()
             ]
+            for qs in batch_questions
+        ]
 
-            batch_data["question"] = batch_questions
+        batch_data["question"] = batch_questions
 
-            batch_file = f"training_data/qa_dataset_batch_{batch}.parquet"
-            save_qa_to_parquet(batch_data, batch_file)
+        batch_file = f"training_data/qa_dataset_batch_{batch}.parquet"
+        save_qa_to_parquet(batch_data, batch_file)
 
-            questions.extend(batch_questions)
-
-        questions = []
-        for batch, batch_data in tqdm(
-            entity_prompts_grouped,
-            desc="Generating questions for entity prompts",
-            position=2,
-        ):
-
-            # Process the batch separately by extracting 'prompt' field
-            batch_prompts = batch_data["prompt"].tolist()
-
-            # Call qa_generate with the batch of prompts
-            batch_questions = qa_generator(
-                batch_prompts, max_length=50, truncation=True
-            )
-            batch_questions = [
-                (
-                    "for the next question, return the 'section', "
-                    "the 'headline', and the 'URI'\n"
-                    f"question: '{q}'"
-                )
-                for q in batch_questions
-            ]
-            batch_data["question"] = batch_questions
-
-            batch_file = f"training_data/qa_dataset_batch_{batch}.parquet"
-            save_qa_to_parquet(batch_data, batch_file)
-
-            questions.extend(batch_questions)
+        questions.extend(batch_questions)
 
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
     print(datetime.now(), "All batches processed")
-
-
-# Modify the QA generation function
-def generate_qa_pairs(
-    news_docs, news_metadata, batch_size=1000, entity_batch_size=1000
-):
-    """generate_qa_pairs"""
-
-    qa_generator = pipeline(
-        "text2text-generation",
-        model="google/flan-t5-large",
-        device=0 if torch.cuda.is_available() else -1,
-    )
-    qa_data = []
-    debug_data = []  # Store problematic responses
-    total_batches = (len(news_docs) + batch_size - 1) // batch_size
-
-    print(datetime.now(), "start processing generated questions for training")
-    for batch_start in tqdm(
-        range(0, len(news_docs), batch_size),
-        desc=f"Processing {total_batches} Batches {datetime.now()}",
-        position=0,
-    ):
-        batch_docs = news_docs[batch_start : batch_start + batch_size]
-        batch_meta = news_metadata[batch_start : batch_start + batch_size]
-
-        question_prompts = []
-        entity_prompts = []
-        entity_mapping = (
-            []
-        )  # Keep track of which entity question belongs to which article
-
-        for doc, meta in zip(batch_docs, batch_meta):
-            context = (
-                f"'section': {meta['section0'] or 'front-page'}\t"
-                f"'headline':{meta['headline0']}\n"
-            )
-            if meta["section1"] != "N/A":
-                context += (
-                    f" [section]: {meta['section1']}\t'headline': {meta['headline1']}\n"
-                )
-            if meta["section2"] != "N/A":
-                context += (
-                    f" 'section': {meta['section2']}\t'headline': {meta['headline2']}\n"
-                )
-            context += f"'URI': {meta['uri']}\n"
-            context += f"'article': {doc}"
-
-            # Generate 3 diverse questions about the article
-            question_prompts.append(
-                "Generate 3 different questions that a reader might ask about the "
-                "following news article. Focus on specific facts, key events, or important "
-                "themes in the article. The questions should be clear, meaningful, and "
-                "relevant to the article's details. The questions should avoid generic inquiries. "
-                "Ensure the question cannot be answered without reading the article.\n"
-                f"'news article': {doc}"
-            )
-
-            # Collect entities in the story
-            # Exception(s):  AP
-            entities = [e for e in extract_named_entities(doc) if e != "AP"]
-
-            # Generate questions for each entity separately
-            for entity in entities:
-                entity_prompts.append(
-                    f"Generate a question about '{entity}' that requires knowledge of the "
-                    "following news article. Focus on specific facts, key events, or important "
-                    "themes in the article. The questions should be clear, meaningful, and "
-                    "relevant to the article's details. The questions should avoid generic "
-                    "inquiries. Ensure the question cannot be answered without reading the "
-                    "article.\n"
-                    f"'news article': {doc}"
-                )
-                entity_mapping.append(
-                    (doc, meta)
-                )  # Track which article each entity belongs to
-
-        # print(datetime.now(), f"Processing batch {batch_start // batch_size + 1}/{total_batches}")
-
-        article_questions = qa_generator(
-            question_prompts, max_length=50, truncation=True
-        )
-        # Store results for articles
-        for (doc, meta), _, article_question_output in zip(
-            zip(batch_docs, batch_meta), question_prompts, article_questions
-        ):
-            if isinstance(article_question_output["generated_text"], str):
-                questions = [
-                    q
-                    for q in article_question_output["generated_text"].split("\n")
-                    if q != ""
-                ]
-            if isinstance(article_question_output["generated_text"], list):
-                questions = article_question_output["generated_text"]
-                for q in questions:
-                    if "\n" in q:
-                        questions.append(*[qq for qq in q.split()])
-            for question in questions:
-                answer = f"'URI'  {meta['uri']}\n"
-                for i in range(3):
-                    if meta[f"section{i}"] != "N/A":
-                        answer += (
-                            f"'section' {meta[f"section{i}"] or "front-page"}\t"
-                            f"'headline' {meta[f'headline{i}']}\n"
-                        )
-
-                qa_data.append(
-                    {
-                        "question": (
-                            "for the next question, return the 'section', "
-                            "the 'headline', and the 'URI'\n"
-                            f"question: '{question}'"
-                        ),
-                        "context": context,
-                        "answer": answer,
-                    }
-                )
-
-        # Process entity-related questions in batches
-        total_entity_batches = (
-            len(entity_prompts) + batch_size - 1
-        ) // entity_batch_size
-        for entity_batch_start in tqdm(
-            range(0, len(entity_prompts), entity_batch_size),
-            desc=f"Processing {total_entity_batches} Entity Batches {datetime.now()}",
-            position=1,
-            leave=False,
-        ):
-            entity_batch = entity_prompts[
-                entity_batch_start : entity_batch_start + entity_batch_size
-            ]
-
-            entity_results = qa_generator(entity_batch, max_length=50, truncation=True)
-
-            # Log responses if no valid questions are found
-            if entity_results is None or len(entity_results) < len(entity_batch):
-                print(
-                    f"Mismatch detected! entity_batch: {len(entity_batch)}, "
-                    f"entity_results: {len(entity_results)}"
-                )
-                print(
-                    f"entity results type: {type(entity_results)}\t"
-                    f"entity_batch type: {type(entity_batch)}"
-                )
-                debug_data.append(
-                    {"context": entity_batch, "raw_output": entity_results}
-                )
-                save_debug_output(entity_batch, entity_results)
-                raise Exception("ERROR: please review debug_missing_questions.jsonl")
-
-            for (doc, meta), _, entity_question_output in zip(
-                entity_mapping[
-                    entity_batch_start : entity_batch_start + entity_batch_size
-                ],
-                entity_prompts,
-                entity_results,
-            ):
-                if isinstance(entity_question_output["generated_text"], str):
-                    questions = [
-                        q
-                        for q in entity_question_output["generated_text"].split("\n")
-                        if q != ""
-                    ]
-                if isinstance(entity_question_output["generated_text"], list):
-                    questions = entity_question_output["generated_text"]
-                    for q in questions:
-                        if "\n" in q:
-                            questions.append(*[qq for qq in q.split()])
-                for question in questions:
-                    answer = f"'URI'  {meta['uri']}\n"
-                    for i in range(3):
-                        if meta[f"section{i}"] != "N/A":
-                            answer += (
-                                f"'section' {meta[f"section{i}"] or "front-page"}\t"
-                                f"'headline' {meta[f'headline{i}']}\n"
-                            )
-                    qa_data.append(
-                        {
-                            "question": (
-                                "for the next question, return the 'section', "
-                                "the 'headline', and the 'URI'\n"
-                                f"question: '{question}'"
-                            ),
-                            "context": context,
-                            "answer": answer,
-                        }
-                    )
-
-        # Save batch results and clear memory
-        batch_file = (
-            f"training_data/qa_dataset_batch_{batch_start // batch_size + 1}.parquet"
-        )
-        save_qa_to_parquet(qa_data, batch_file)
-        qa_data.clear()
-
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
-    print(datetime.now(), "All batches processed")
-    del qa_generator
-    torch.cuda.empty_cache()
 
 
 def get_training_data() -> pd.DataFrame:
