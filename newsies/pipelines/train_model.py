@@ -8,18 +8,19 @@ from pathlib import Path
 import json
 import os
 
+import torch
+from torch.multiprocessing import set_start_method
+
 from huggingface_hub import snapshot_download
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
+    AutoModelForSeq2SeqLM,
     TrainingArguments,
     Trainer,
-    pipeline,
 )
-import torch
 from peft import LoraConfig, get_peft_model
 from datasets import Dataset
-from tqdm import tqdm
 import spacy
 import pandas as pd
 
@@ -28,6 +29,18 @@ from newsies.chromadb_client import ChromaDBClient
 from newsies import targets
 
 # pylint: disable=broad-exception-raised
+
+# Set the torch multiprocessing start method to 'spawn'
+
+
+def log_memory_usage(stage):
+    """log_memory_usage"""
+    allocated = torch.cuda.memory_allocated() / 1e9  # Convert to GB
+    reserved = torch.cuda.memory_reserved() / 1e9  # Convert to GB
+    with open("mem.log", "a", encoding="utf8") as fh:
+        fh.writelines(
+            f"[{stage}] Allocated: {allocated:.2f} GB, Reserved: {reserved:.2f} GB\n"
+        )
 
 
 # Step 1: Connect to ChromaDB and Retrieve Data
@@ -88,22 +101,6 @@ def extract_named_entities(text):
     return entities
 
 
-def extract_named_entities_batch(texts):
-    """Batch extract named entities using spaCy's efficient pipe processing"""
-    entities_list = []
-    nlp = spacy.load("en_core_web_sm")
-
-    for doc in nlp.pipe(
-        texts, batch_size=32, n_process=4
-    ):  # Batch and use multiprocessing
-        entities = {
-            ent.text for ent in doc.ents if ent.label_ in {"PERSON", "ORG", "GPE"}
-        }
-        entities_list.append(list(entities))  # Convert set to list
-
-    return entities_list
-
-
 def save_debug_output(prompt, results):
     """
     save_debug_output
@@ -116,7 +113,7 @@ def save_debug_output(prompt, results):
         fh.write(json.dumps(debug_data, indent=4))
 
 
-def save_qa_to_parquet(qa_data, file_path):
+def save_qa_to_parquet(qa_data, file_path: str):
     """save_qa_to_parquet"""
     df = pd.DataFrame(qa_data)
     df.to_parquet(file_path, index=False)
@@ -133,7 +130,65 @@ def generate_qa_pairs(batch_size=1000, number_of_questions: int = 3):
     generate qa_pairs2
     """
 
+    number_of_procs = torch.cuda.device_count()
+
     news_docs, news_metadata = fetch_news_data()
+    print(
+        datetime.now(),
+        f"start geneating questions for {len(news_docs)} articles\t"
+        f"batch_size: {batch_size}\tnumber_of_processes: {number_of_procs}\t"
+        f"number_of_questions per prompt: {number_of_questions}",
+    )
+
+    nlp = spacy.load("en_core_web_sm")  # load model for detecting
+
+    def extract_named_entities_batch(texts):
+        """Batch extract named entities using spaCy's efficient pipe processing"""
+
+        # Label	Description
+        #
+        # PERSON	Named persons (e.g., Albert Einstein)
+        # ORG	Organizations, companies, agencies (e.g., Apple, CIA)
+        # GPE	Countries, cities, states (e.g., France, New York)
+        # LOC	Non-GPE locations, like mountains, rivers (e.g., Everest, Amazon River)
+        # FAC	Facilities (e.g., Empire State Building, Golden Gate Bridge)
+        # NORP	Nationalities, religious or political groups (e.g., American, Buddhist, Republican)
+        # DATE	Absolute/relative dates or periods (e.g., June 20, 1990, next week)
+        # TIME	Times of the day (e.g., 2:30 PM, midnight)
+        # MONEY	Monetary values (e.g., $10, 500 euros)
+        # PERCENT	Percentage expressions (e.g., 10% increase)
+        # CARDINAL	Numbers that do not fall into other categories (e.g., one, 200 million)
+        # ORDINAL	Rankings (e.g., first, 2nd place)
+        # QUANTITY	Measurements (e.g., 3kg, 5 miles)
+        # PRODUCT	Objects, vehicles, food, etc. (e.g., iPhone, Boeing 747)
+        # EVENT	Named events (e.g., World War II, Super Bowl)
+        # LAW	Named laws, treaties, regulations (e.g., First Amendment, GDPR)
+        # WORK_OF_ART	Titles of books, songs, movies (e.g., The Great Gatsby, Star Wars)
+        # LANGUAGE	Any named language (e.g., French, Python)
+
+        relevant_labels = {
+            "EVENT",
+            "FAC",
+            "GPE",
+            "LAW",
+            "LOC",
+            "NORP",
+            "ORG",
+            "PERSON",
+            "PRODUCT",
+            "WORK_OF_ART",
+        }
+
+        entities_list = []
+
+        for doc in nlp.pipe(
+            texts, batch_size=32, n_process=4
+        ):  # Batch and use multiprocessing
+            entities = {ent.text for ent in doc.ents if ent.label_ in relevant_labels}
+            entities_list.append(list(entities))  # Convert set to list
+
+        return entities_list
+
     df = pd.DataFrame(
         {
             "doc": news_docs,
@@ -146,9 +201,11 @@ def generate_qa_pairs(batch_size=1000, number_of_questions: int = 3):
             "headline2": [meta["headline2"] for meta in news_metadata],
         }
     )
-
     # Apply batch NER processing
     df["ne"] = extract_named_entities_batch(df["doc"].tolist())
+    del nlp
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
     df1 = df[(df["section1"] != "N/A") & (df["headline1"] != "N/A")]
     df1 = df1.drop(["section0", "headline0"], axis=1)
@@ -198,61 +255,106 @@ def generate_qa_pairs(batch_size=1000, number_of_questions: int = 3):
 
     df = pd.concat([dfnoents, dfne], ignore_index=True, sort=False)
     df = df.drop(["ne", "doc"], axis=1)
-    df["batch"] = df.index // batch_size
-    prompt_count = len(df)
-    batched_data = df.groupby("batch")
+    dataset = Dataset.from_pandas(df)
+
     # reclaim memory ahead of
     del df
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
-    qa_generator = pipeline(
-        "text2text-generation",
-        model="google/flan-t5-large",
-        device=0 if torch.cuda.is_available() else -1,
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+    os.environ["PYDEVD_DISABLE_FILE_VALIDATION"] = "1"
+
+    # Model & Tokenizer Initialization
+    base_model_name = "google/flan-t5-large"
+    tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+    model = AutoModelForSeq2SeqLM.from_pretrained(
+        base_model_name, torch_dtype=torch.float16, device_map="auto"
     )
 
-    questions = []
-    # Run qa_generator on question_prompt_ds - this should be batched to batch_size
-    for batch, batch_data in tqdm(
-        batched_data,
-        desc=(
-            f"Generate {number_of_questions} questions for "
-            f"{prompt_count} prompts in batches of {batch_size}"
-        ),
-        position=0,
-    ):
+    # Enable torch.compile() for speedup (if available)
+    if torch.__version__ >= "2.0":
+        model = torch.compile(model)
 
-        # Process the batch separately by extracting 'prompt' field
-        batch_prompts = batch_data["prompt"].tolist()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
 
-        # Call qa_generate with the batch of prompts
-        batch_questions = qa_generator(
-            batch_prompts,
-            max_length=100,
-            truncation=True,
-            num_return_sequences=number_of_questions,
-            do_sample=True,  # Introduce randomness for variation
-            temperature=0.7,  # Adjust temperature for diversity
-            top_p=0.9,  # Nucleus sampling for more natural responses)
+    # Initialize HF Pipeline
+    # qa_generator = pipeline(
+    #    "text2text-generation",
+    #    model=model,
+    #    tokenizer=tokenizer,
+    # )
+
+    # Define processing function for batch generation
+    def generate_questions(batch, indices):
+        batch_prompts = batch["prompt"]
+
+        # Tokenize batch (explicit tokenization since we're using .generate())
+        # log_memory_usage("Before Tokenization")
+        batch_inputs = tokenizer(
+            batch_prompts, return_tensors="pt", padding=True, truncation=True
+        ).to(device)
+        # log_memory_usage("After Tokenization")
+
+        # Compute batch ID from indices
+        batch_id: int = indices[0] // batch_size  # First index determines batch
+        log_memory_usage("Before Generation")
+        with torch.no_grad():  # disable gradient computation
+            # with torch.amp.autocast(device_type=str(device)):  # use mixed precision
+            # Generate Questions using Hugging Face Pipeline (Batch Mode)
+            batch_questions_encoded = model.generate(
+                **batch_inputs,
+                max_length=100,
+                num_return_sequences=number_of_questions,  # Generate 3 questions per prompt
+                do_sample=True,  # Introduce randomness for variation
+                temperature=0.7,  # Adjust temperature for diversity
+                top_p=0.9,  # Nucleus sampling for more natural responses
+            )
+
+        # log_memory_usage("After Generation")
+        batch_questions_encoded = batch_questions_encoded.cpu()
+        # log_memory_usage("After Moving to CPU")
+
+        batch_questions = tokenizer.batch_decode(
+            batch_questions_encoded, skip_special_tokens=True
         )
-        batch_questions = [
+
+        # Format questions properly
+        formatted_questions = [
             [
                 (
                     "for the next question, return the 'section', "
                     "the 'headline', and the 'URI'\n"
-                    f"question: '{v}'"
+                    f"question: '{batch_questions[i+ii]}'"
                 )
-                for d in qs
-                for v in d.values()
+                for ii in range(0, number_of_questions)
             ]
-            for qs in batch_questions
+            for i in range(0, len(batch_questions), number_of_questions)
         ]
 
-        batch_data["question"] = batch_questions
+        batch["question"] = formatted_questions
 
-        batch_file = f"training_data/qa_dataset_batch_{batch}.parquet"
-        save_qa_to_parquet(batch_data, batch_file)
+        # Save Each Batch Immediately to Parquet
+        save_qa_to_parquet(
+            batch, file_path=f"./training_data/qa_dataset_batch_{batch_id:04d}.parquet"
+        )
 
-        questions.extend(batch_questions)
+        # 🔥 Free GPU memory manually
+        del batch_inputs, batch_questions_encoded  # Delete tensors
+        torch.cuda.empty_cache()  # Free unused GPU memory
+        torch.cuda.synchronize()  # Ensure all operations are complete
+        # log_memory_usage("After Emptying Cache")
+
+    # Apply Efficient Batch Processing
+    set_start_method("spawn", force=True)
+    dataset.map(
+        generate_questions,
+        batched=True,
+        batch_size=batch_size,
+        with_indices=True,
+        num_proc=torch.cuda.device_count(),  # one process per GPU
+    )
 
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
@@ -260,13 +362,13 @@ def generate_qa_pairs(batch_size=1000, number_of_questions: int = 3):
     print(datetime.now(), "All batches processed")
 
 
-def get_training_data() -> pd.DataFrame:
+def load_training_data() -> pd.DataFrame:
     """
-    get_training_data
+    load_training_data
     """
     project_root = os.path.abspath(".")
-    train_df = pd.read_parquet(project_root + "/notebooks/training_data")
-    return train_df
+    df = pd.read_parquet(project_root + "/training_data/")
+    return df
 
 
 def format_dataset(qa_dataset):
@@ -309,7 +411,7 @@ def get_train_and_test_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     get_train_and_test_data
     """
     # Apply the function
-    train_df = get_training_data()
+    train_df = load_training_data()
     split_dataset = format_dataset(train_df)
     train_dataset = split_dataset["train"]
     test_dataset = split_dataset["test"]
@@ -341,6 +443,7 @@ def train_model():
     model = get_peft_model(model, lora_config)
 
     # Training Arguments
+    os.mkdir("./news_finetune_model")
     training_args = TrainingArguments(
         output_dir="./news_finetune_model",
         per_device_train_batch_size=1,
