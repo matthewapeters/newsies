@@ -11,6 +11,8 @@ from newsies.pipelines.train_model import (
     train_model,
     test_lora,
     get_train_and_test_data,
+    get_latest_lora_adapter,
+    get_latest_test_data,
 )
 
 
@@ -35,15 +37,12 @@ def test__train_model():
     assert len(test_data) > 0
 
 
-def test__test_lora():
+def test__test_latest_lora_adapter():
     """
-    test__test_lora
+    test__test_latest_lora_adapter
     """
-    # TODO we should get the last entry in lora_adapters.txt
-    lora_dir = "./lora_adapaters/mistal_lora_202503180906/"
-    # TODO we should get the most recent test_data
-    generate_qa_pairs(batch_size=11, number_of_questions=3)
-    _, test_data = get_train_and_test_data()
+    lora_dir = get_latest_lora_adapter()
+    test_data = get_latest_test_data()
 
     # run the test against the model/adapter
     results = test_lora(lora_dir, test_data)

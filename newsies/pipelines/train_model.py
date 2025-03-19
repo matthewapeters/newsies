@@ -600,3 +600,28 @@ def test_lora(lora_dir: str, test_data: pd.DataFrame) -> Dict[str, Any]:
         torch.cuda.empty_cache()
 
     return output_dict
+
+
+def get_latest_lora_adapter():
+    """
+    get_latest_lora_adapter
+    """
+    with open("./lora_adaptors.txt", "rb") as fh:
+        try:
+            fh.seek(-2, os.SEEK_END)
+            while fh.read(1) != b"\n":
+                fh.seek(-2, os.SEEK_CUR)
+            last_line = fh.readline().decode(encoding="utf8")
+        except OSError:
+            last_line = fh.readline().decode(encoding="utf8")
+    return last_line
+
+
+def get_latest_test_data() -> pd.DataFrame:
+    """
+    get_latest_test_data
+    """
+    dirs = os.listdir("./test_data")
+    dirs.sort()
+    latest_dir = dirs[-1]
+    return pd.read_parquet(f"./test_data/{latest_dir}/test_data.parquet")
