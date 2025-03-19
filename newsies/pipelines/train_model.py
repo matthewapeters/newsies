@@ -308,7 +308,7 @@ def generate_qa_pairs(batch_size=1000, number_of_questions: int = 3):
 
         # Compute batch ID from indices
         batch_id: int = indices[0] // batch_size  # First index determines batch
-        log_memory_usage("Before Generation")
+        # log_memory_usage("Before Generation")
         with torch.no_grad():  # disable gradient computation
             # with torch.amp.autocast(device_type=str(device)):  # use mixed precision
             # Generate Questions using Hugging Face Pipeline (Batch Mode)
@@ -507,6 +507,11 @@ def train_model() -> tuple[str, pd.DataFrame]:
     model.save_pretrained(lora_dir)
     with open("./lora_adaptors.txt", "a", encoding="utf8") as fh:
         fh.write(f"{lora_dir}\n")
+
+    # clear the cuda cache
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
     return (lora_dir, test_dataset)
 
 
@@ -590,5 +595,8 @@ def test_lora(lora_dir: str, test_data: pd.DataFrame) -> Dict[str, Any]:
             isinstance(pred, str) and len(pred) > 0 for pred in predictions
         ),  # Basic check for valid outputs
     }
+
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
     return output_dict
