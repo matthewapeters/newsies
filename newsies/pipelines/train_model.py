@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 import json
 import os
-
+from typing import Any, Dict
 import torch
 from torch.multiprocessing import set_start_method
 
@@ -18,8 +18,9 @@ from transformers import (
     AutoModelForSeq2SeqLM,
     TrainingArguments,
     Trainer,
+    BatchEncoding,
 )
-from peft import LoraConfig, get_peft_model
+from peft import LoraConfig, get_peft_model, PeftModel
 from datasets import Dataset
 import spacy
 import pandas as pd
@@ -115,7 +116,7 @@ def save_debug_output(prompt, results):
 
 def save_qa_to_parquet(qa_data, file_path: str):
     """save_qa_to_parquet"""
-    df = pd.DataFrame(qa_data)
+    df = pd.DataFrame(dict(qa_data))
     df.to_parquet(file_path, index=False)
 
 
@@ -127,7 +128,7 @@ def load_qa_from_parquet(file_path):
 
 def generate_qa_pairs(batch_size=1000, number_of_questions: int = 3):
     """
-    generate qa_pairs2
+    generate qa_pairs
     """
 
     number_of_procs = torch.cuda.device_count()
@@ -199,6 +200,7 @@ def generate_qa_pairs(batch_size=1000, number_of_questions: int = 3):
             "headline1": [meta["headline1"] for meta in news_metadata],
             "section2": [meta["section2"] for meta in news_metadata],
             "headline2": [meta["headline2"] for meta in news_metadata],
+            "answer": "",
         }
     )
     # Apply batch NER processing
@@ -254,7 +256,14 @@ def generate_qa_pairs(batch_size=1000, number_of_questions: int = 3):
     )
 
     df = pd.concat([dfnoents, dfne], ignore_index=True, sort=False)
-    df = df.drop(["ne", "doc"], axis=1)
+    df = df.drop(["ne"], axis=1)
+    df["answer"] = df.apply(
+        lambda row: (
+            f"URI:' {row['uri']}'  SECTION: '{row['section']}'  "
+            f"HEADLINE: '{row['headline']}'"
+        ),
+        axis=1,
+    )
     dataset = Dataset.from_pandas(df)
 
     # reclaim memory ahead of
@@ -326,6 +335,9 @@ def generate_qa_pairs(batch_size=1000, number_of_questions: int = 3):
                 (
                     "for the next question, return the 'section', "
                     "the 'headline', and the 'URI'\n"
+                    f"context section: {batch['section']}\n"
+                    f"context uri: {batch['uri']}\n ontext headline: {batch['headline']}\n"
+                    f"context article: {batch['doc']}\n"
                     f"question: '{batch_questions[i+ii]}'"
                 )
                 for ii in range(0, number_of_questions)
@@ -371,7 +383,7 @@ def load_training_data() -> pd.DataFrame:
     return df
 
 
-def format_dataset(qa_dataset):
+def format_dataset(qa_dataset: pd.DataFrame):
     """Ensure tokenizer has a padding token and tokenize dataset."""
 
     base_model_name = "mistralai/Mistral-7B-v0.3"
@@ -381,16 +393,21 @@ def format_dataset(qa_dataset):
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token  # Use EOS token for padding
 
-    def tokenize_sample(sample):
+    def tokenize_sample(sample) -> BatchEncoding:
         """Tokenizes input and output text."""
         question = str(sample["question"]) if sample["question"] is not None else ""
         answer = str(sample["answer"]) if sample["answer"] is not None else ""
 
-        inputs = tokenizer(question, padding=True, truncation=True, max_length=512)
-        outputs = tokenizer(answer, padding=True, truncation=True, max_length=512)
+        # Tokenize both question and answer with consistent padding length
+        tokenized = tokenizer(
+            question,
+            text_target=answer,  # Proper way to tokenize input + labels
+            padding="max_length",  # Force consistent padding
+            truncation=True,
+            max_length=512,
+        )
 
-        inputs["labels"] = outputs["input_ids"]  # Assign tokenized answers as labels
-        return inputs
+        return tokenized  # Already contains input_ids, attention_mask, and labels
 
     # Drop rows where 'question' is NaN or empty
     qa_dataset = qa_dataset.dropna(subset=["question"])
@@ -400,13 +417,22 @@ def format_dataset(qa_dataset):
 
     dataset = Dataset.from_pandas(qa_dataset)
     tokenized_dataset = dataset.map(
-        tokenize_sample, remove_columns=["question", "answer"]
+        tokenize_sample,
+        remove_columns=[
+            "question",
+            "answer",
+            "uri",
+            "section",
+            "headline",
+            "prompt",
+            "doc",
+        ],
     )
 
     return tokenized_dataset.train_test_split(test_size=0.2)
 
 
-def get_train_and_test_data() -> tuple[pd.DataFrame, pd.DataFrame]:
+def get_train_and_test_data() -> tuple[Dataset, Dataset]:
     """
     get_train_and_test_data
     """
@@ -418,10 +444,18 @@ def get_train_and_test_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     return (train_dataset, test_dataset)
 
 
-def train_model():
+def train_model() -> tuple[str, pd.DataFrame]:
     """
     train_model
+        consumes the latest data in training_data and splits it 80:20 for training and
+        test data.
+        Trains the LoRA for the mistral model and saves it to the archive
+        lora_adaptors/mistral_lora_{YYYmmddHHMM}
+        returns a tuple containing the path to the new LoRa and a dataframe of test data
     """
+    lora_dir = f"lora_adapters/mistal_lora_{datetime.now().strftime(r'%Y%m%d%H%M')}"
+    os.makedirs(f"./{lora_dir}", exist_ok=True)
+
     train_dataset, test_dataset = get_train_and_test_data()
 
     # Step 5: Load Model and Apply LoRA Fine-Tuning
@@ -431,6 +465,14 @@ def train_model():
         base_model_name, torch_dtype=torch.float16, device_map="auto"
     )
     tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+
+    # Ensure the tokenizer has a padding token
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token  # Use EOS token for padding
+
+    # Resize token embeddings if a new pad token was added
+    if len(tokenizer) != model.config.vocab_size:
+        model.resize_token_embeddings(len(tokenizer))
 
     # LoRA Configuration
     lora_config = LoraConfig(
@@ -442,8 +484,6 @@ def train_model():
     )
     model = get_peft_model(model, lora_config)
 
-    # Training Arguments
-    os.mkdir("./news_finetune_model")
     training_args = TrainingArguments(
         output_dir="./news_finetune_model",
         per_device_train_batch_size=1,
@@ -464,6 +504,10 @@ def train_model():
         tokenizer=tokenizer,
     )
     trainer.train()
+    model.save_pretrained(lora_dir)
+    with open("./lora_adaptors.txt", "a", encoding="utf8") as fh:
+        fh.write(f"{lora_dir}\n")
+    return (lora_dir, test_dataset)
 
 
 def download_mistral():
@@ -484,3 +528,67 @@ def download_mistral():
         ],
         local_dir=mistral_models_path,
     )
+
+
+def test_lora(lora_dir: str, test_data: pd.DataFrame) -> Dict[str, Any]:
+    """
+    Loads a base Mistral-7B-v0.3 model and applies a LoRA adapter,
+    then evaluates it using the provided test dataset.
+
+    Args:
+        lora_dir (str): Path to the directory containing the saved LoRA adapter.
+        test_data (pd.DataFrame): Test dataset containing input prompts and expected outputs.
+
+    Returns:
+        Dict[str, Any]: Dictionary with model predictions and validation metrics.
+    """
+
+    # Load Base Model & Tokenizer
+    base_model_name = "mistralai/Mistral-7B-v0.3"
+    tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+
+    # Ensure tokenizer has a padding token
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    base_model = AutoModelForCausalLM.from_pretrained(
+        base_model_name, torch_dtype=torch.float16, device_map="auto"
+    )
+
+    # Load LoRA Adapter
+    model = PeftModel.from_pretrained(base_model, lora_dir)
+    model.eval()  # Set to evaluation mode
+
+    # Convert test_data DataFrame to Hugging Face Dataset
+    dataset = Dataset.from_pandas(test_data)
+
+    def generate_output(sample):
+        """Generates text using the model given a prompt."""
+        input_text = sample["question"] if "question" in sample else sample["prompt"]
+        input_ids = tokenizer(
+            input_text, return_tensors="pt", padding=True, truncation=True
+        ).input_ids.to(model.device)
+
+        with torch.no_grad():
+            output_ids = model.generate(input_ids, max_length=512)
+
+        generated_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+        return {"generated_answer": generated_text}
+
+    # Generate predictions
+    results = dataset.map(generate_output)
+
+    # Compare with expected answers (if available)
+    predictions = results["generated_answer"]
+    expected = results["answer"] if "answer" in results.column_names else None
+
+    # Construct validation dictionary
+    output_dict = {
+        "predictions": predictions,
+        "expected": expected if expected else "N/A",
+        "success": all(
+            isinstance(pred, str) and len(pred) > 0 for pred in predictions
+        ),  # Basic check for valid outputs
+    }
+
+    return output_dict
