@@ -29,7 +29,7 @@ import pandas as pd
 from newsies.chromadb_client.main import ChromaDBClient
 from newsies import targets
 
-# pylint: disable=broad-exception-raised
+# pylint: disable=broad-exception-raised, broad-exception-caught
 
 
 def log_memory_usage(stage):
