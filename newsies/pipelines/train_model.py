@@ -26,12 +26,10 @@ import spacy
 import pandas as pd
 
 
-from newsies.chromadb_client import ChromaDBClient
+from newsies.chromadb_client.main import ChromaDBClient
 from newsies import targets
 
 # pylint: disable=broad-exception-raised
-
-# Set the torch multiprocessing start method to 'spawn'
 
 
 def log_memory_usage(stage):
@@ -416,7 +414,9 @@ def format_dataset(qa_dataset: pd.DataFrame):
     ]  # Remove empty questions
 
     dataset = Dataset.from_pandas(qa_dataset)
-    tokenized_dataset = dataset.map(
+    split_dataset = dataset.train_test_split(test_size=0.2)
+
+    tokenized_train = split_dataset["train"].map(
         tokenize_sample,
         remove_columns=[
             "question",
@@ -428,8 +428,8 @@ def format_dataset(qa_dataset: pd.DataFrame):
             "doc",
         ],
     )
-
-    return tokenized_dataset.train_test_split(test_size=0.2)
+    split_dataset["tokenized_train"] = tokenized_train
+    return split_dataset
 
 
 def get_train_and_test_data() -> tuple[Dataset, Dataset]:
@@ -439,9 +439,12 @@ def get_train_and_test_data() -> tuple[Dataset, Dataset]:
     # Apply the function
     train_df = load_training_data()
     split_dataset = format_dataset(train_df)
-    train_dataset = split_dataset["train"]
+    tokenized_train_dataset = split_dataset["tokenized_train"]
     test_dataset = split_dataset["test"]
-    return (train_dataset, test_dataset)
+    test_data_dir = f"./test_data/{datetime.now().strftime(r'%Y%m%d%H%M')}"
+    os.makedirs(test_data_dir, exist_ok=True)
+    test_dataset.to_parquet(f"{test_data_dir}/test_data.parquet")
+    return (tokenized_train_dataset, test_dataset)
 
 
 def train_model() -> tuple[str, pd.DataFrame]:
@@ -563,25 +566,22 @@ def test_lora(lora_dir: str, test_data: pd.DataFrame) -> Dict[str, Any]:
     # Load LoRA Adapter
     model = PeftModel.from_pretrained(base_model, lora_dir)
     model.eval()  # Set to evaluation mode
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Convert test_data DataFrame to Hugging Face Dataset
-    dataset = Dataset.from_pandas(test_data)
-
-    def generate_output(sample):
+    def generate_output(sample: Dataset):
         """Generates text using the model given a prompt."""
-        input_text = sample["question"] if "question" in sample else sample["prompt"]
-        input_ids = tokenizer(
-            input_text, return_tensors="pt", padding=True, truncation=True
-        ).input_ids.to(model.device)
+        inputs = tokenizer(
+            sample, return_tensors="pt", padding=True, truncation=True, max_length=512
+        ).to(device)
 
         with torch.no_grad():
-            output_ids = model.generate(input_ids, max_length=512)
+            output_ids = model.generate(**inputs, max_length=512)
 
         generated_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
         return {"generated_answer": generated_text}
 
     # Generate predictions
-    results = dataset.map(generate_output)
+    results = test_data.map(generate_output)
 
     # Compare with expected answers (if available)
     predictions = results["generated_answer"]
@@ -606,22 +606,40 @@ def get_latest_lora_adapter():
     """
     get_latest_lora_adapter
     """
-    with open("./lora_adaptors.txt", "rb") as fh:
-        try:
-            fh.seek(-2, os.SEEK_END)
-            while fh.read(1) != b"\n":
-                fh.seek(-2, os.SEEK_CUR)
-            last_line = fh.readline().decode(encoding="utf8")
-        except OSError:
-            last_line = fh.readline().decode(encoding="utf8")
-    return last_line
+    with open("./lora_adapters.txt", "rb") as file:
+        file.seek(-2, os.SEEK_END)
+
+        # If the file is empty, return an empty string
+        if file.tell() == 0:
+            return ""
+
+        offset = -2
+        whence = os.SEEK_END
+        while file.read(1) != b"\n":
+            try:
+                file.seek(offset, whence)
+            except (
+                OSError
+            ):  # Handle cases where the file size is smaller than the offset
+                file.seek(0)  # Go to the beginning of the file
+                return file.readline().decode("utf8").strip()
+            whence = os.SEEK_CUR
+        return file.readline().decode("utf-8").strip()
 
 
 def get_latest_test_data() -> pd.DataFrame:
     """
     get_latest_test_data
     """
-    dirs = os.listdir("./test_data")
-    dirs.sort()
-    latest_dir = dirs[-1]
-    return pd.read_parquet(f"./test_data/{latest_dir}/test_data.parquet")
+    try:
+        dirs = os.listdir("./test_data")
+        if len(dirs) == 0:
+            raise OSError("No test data found. Please run the training pipeline first.")
+        dirs.sort()
+        latest_dir = dirs[-1]
+        df = pd.read_parquet(f"./test_data/{latest_dir}/test_data.parquet")
+    except OSError as e:
+        raise OSError(
+            "No test data found. Please run the training pipeline first."
+        ) from e
+    return df

@@ -23,7 +23,7 @@ from newsies.ap_news.latest_news import path
 from ..document_structures import Document
 
 
-# pylint: disable=broad-exception-caught, too-many-locals
+# pylint: disable=broad-exception-caught, too-many-locals, global-statement
 
 
 mp.set_start_method("spawn", force=True)
@@ -33,8 +33,8 @@ DEVICE_STR = "cuda" if torch.cuda.is_available() else "cpu"
 # Load the Pegasus model and tokenizer
 # You can choose a different model based on your dataset (e.g., 'google/pegasus-large')
 MODEL_NAME = "google/pegasus-large"
-model = PegasusForConditionalGeneration.from_pretrained(MODEL_NAME).to(DEVICE_STR)
-tokenizer = PegasusTokenizer.from_pretrained(MODEL_NAME)
+MODEL = None
+TOKENIZER = None
 
 
 def summarize_chunk(chunk, max_length=200):
@@ -42,13 +42,20 @@ def summarize_chunk(chunk, max_length=200):
     summarize_chunk
 
     """
-    inputs = tokenizer(chunk, return_tensors="pt", max_length=1024, truncation=True).to(
+    global MODEL, TOKENIZER
+    if MODEL is None:
+        MODEL = PegasusForConditionalGeneration.from_pretrained(MODEL_NAME).to(
+            DEVICE_STR
+        )
+    if TOKENIZER is None:
+        TOKENIZER = PegasusTokenizer.from_pretrained(MODEL_NAME)
+    inputs = TOKENIZER(chunk, return_tensors="pt", max_length=1024, truncation=True).to(
         DEVICE_STR
     )
-    summary_ids = model.generate(
+    summary_ids = MODEL.generate(
         **inputs, max_length=max_length
     )  # Output summary length limit
-    return tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+    return TOKENIZER.decode(summary_ids[0], skip_special_tokens=True)
 
 
 def read_story(uri) -> str:
@@ -57,7 +64,7 @@ def read_story(uri) -> str:
     try:
         with open(uri, "r", encoding="utf8") as f:
             text = f.read()
-        # remove AP credit tags for Video or photos (and related caption) , as they are not in the text
+        # remove AP credit tags for Video or photos (and related caption), as they are not in the text
         # remove the AP legal at the end so it does not confuse the summary
         text = re.sub(
             r".*\(AP \w*\/\w* \w*\)|The Associated Press.*$|.*AP is solely responsible.*$|\n{2,}",
@@ -81,7 +88,11 @@ def read_story(uri) -> str:
 
 def tokenize_text(text: str) -> int:
     """Returns the token count for a given text."""
-    return len(tokenizer.encode(text, add_special_tokens=False))
+    global TOKENIZER
+    if TOKENIZER is None:
+        TOKENIZER = PegasusTokenizer.from_pretrained(MODEL_NAME)
+
+    return len(TOKENIZER.encode(text, add_special_tokens=False))
 
 
 def split_text_with_overlap(
@@ -130,6 +141,10 @@ def summarize_story(uri: str, chroma_client, doc_id: str = None, max_tokens: int
     Returns:
         str: The summarized story.
     """
+    global TOKENIZER
+    if TOKENIZER is None:
+        TOKENIZER = PegasusTokenizer.from_pretrained(MODEL_NAME)
+
     if doc_id:
         try:
             cached_summary = chroma_client.collection.get(
@@ -150,7 +165,7 @@ def summarize_story(uri: str, chroma_client, doc_id: str = None, max_tokens: int
     # Step 2: Process each paragraph
     for paragraph in paragraphs:
         token_count = len(
-            tokenizer.encode(paragraph, add_special_tokens=False)
+            TOKENIZER.encode(paragraph, add_special_tokens=False)
         )  # tokenize_text(paragraph)
 
         if token_count <= max_tokens:
