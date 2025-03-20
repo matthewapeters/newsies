@@ -114,8 +114,11 @@ def save_debug_output(prompt, results):
 
 def save_qa_to_parquet(qa_data, file_path: str):
     """save_qa_to_parquet"""
-    df = pd.DataFrame(dict(qa_data))
-    df.to_parquet(file_path, index=False)
+    try:
+        df = pd.DataFrame(dict(qa_data))
+        df.to_parquet(file_path, index=False)
+    except Exception as e:
+        print(f"Error saving to parquet: {e}")
 
 
 def load_qa_from_parquet(file_path):
@@ -199,6 +202,10 @@ def generate_qa_pairs(batch_size=1000, number_of_questions: int = 3):
             "section2": [meta["section2"] for meta in news_metadata],
             "headline2": [meta["headline2"] for meta in news_metadata],
             "answer": "",
+            "question": "",
+            "train_question": "",
+            "prompt": "",
+            "ne": "",
         }
     )
     # Apply batch NER processing
@@ -326,8 +333,7 @@ def generate_qa_pairs(batch_size=1000, number_of_questions: int = 3):
         batch_questions = tokenizer.batch_decode(
             batch_questions_encoded, skip_special_tokens=True
         )
-
-        # Format questions properly
+        # Format questions properly with prompt and context for model training
         formatted_questions = [
             [
                 (
@@ -342,8 +348,22 @@ def generate_qa_pairs(batch_size=1000, number_of_questions: int = 3):
             ]
             for i in range(0, len(batch_questions), number_of_questions)
         ]
+        batch["train_question"] = formatted_questions
 
-        batch["question"] = formatted_questions
+        # these are just the questions without prompt and context.
+        # necessary for testing the model
+        unformatted_questions = [
+            [
+                (
+                    "for the next question, return the 'section', "
+                    "the 'headline', and the 'URI'\n"
+                    f"question: '{batch_questions[i+ii]}'"
+                )
+                for ii in range(0, number_of_questions)
+            ]
+            for i in range(0, len(batch_questions), number_of_questions)
+        ]
+        batch["question"] = unformatted_questions
 
         # Save Each Batch Immediately to Parquet
         save_qa_to_parquet(
@@ -393,7 +413,11 @@ def format_dataset(qa_dataset: pd.DataFrame):
 
     def tokenize_sample(sample) -> BatchEncoding:
         """Tokenizes input and output text."""
-        question = str(sample["question"]) if sample["question"] is not None else ""
+        question = (
+            str(sample["train_question"])
+            if sample["train_question"] is not None
+            else ""
+        )
         answer = str(sample["answer"]) if sample["answer"] is not None else ""
 
         # Tokenize both question and answer with consistent padding length
@@ -419,6 +443,7 @@ def format_dataset(qa_dataset: pd.DataFrame):
     tokenized_train = split_dataset["train"].map(
         tokenize_sample,
         remove_columns=[
+            "train_question",
             "question",
             "answer",
             "uri",
@@ -581,7 +606,7 @@ def test_lora(lora_dir: str, test_data: pd.DataFrame) -> Dict[str, Any]:
         return {"generated_answer": generated_text}
 
     # Generate predictions
-    results = test_data.map(generate_output)
+    results = test_data["question"].map(generate_output)
 
     # Compare with expected answers (if available)
     predictions = results["generated_answer"]
