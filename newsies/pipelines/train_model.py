@@ -4,10 +4,11 @@ newsies.pipelines.train_model
 """
 
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 import json
 import os
-from typing import Any, Dict
+from typing import Any, Dict, List
 import torch
 from torch.multiprocessing import set_start_method
 
@@ -30,6 +31,11 @@ from newsies.chromadb_client.main import ChromaDBClient
 from newsies import targets
 
 # pylint: disable=broad-exception-raised, broad-exception-caught
+TRAIN = "train"
+TEST = "test"
+TTRAIN = "token_train"
+TTEST = "token_test"
+TRAIN_DATA_TYPES = [TRAIN, TEST, TTRAIN, TTEST]
 
 
 def log_memory_usage(stage):
@@ -112,11 +118,10 @@ def save_debug_output(prompt, results):
         fh.write(json.dumps(debug_data, indent=4))
 
 
-def save_qa_to_parquet(qa_data, file_path: str):
+def save_qa_to_parquet(qa_data: pd.DataFrame, file_path: str):
     """save_qa_to_parquet"""
     try:
-        df = pd.DataFrame(dict(qa_data))
-        df.to_parquet(file_path, index=False)
+        qa_data.to_parquet(file_path, index=False)
     except Exception as e:
         print(f"Error saving to parquet: {e}")
 
@@ -364,6 +369,8 @@ def generate_qa_pairs(batch_size=1000, number_of_questions: int = 3):
             for i in range(0, len(batch_questions), number_of_questions)
         ]
         batch["question"] = unformatted_questions
+        batch = pd.DataFrame(dict(batch))
+        batch = batch.explode("train_question").explode("question")
 
         # Save Each Batch Immediately to Parquet
         save_qa_to_parquet(
@@ -440,7 +447,7 @@ def format_dataset(qa_dataset: pd.DataFrame):
     dataset = Dataset.from_pandas(qa_dataset)
     split_dataset = dataset.train_test_split(test_size=0.2)
 
-    tokenized_train = split_dataset["train"].map(
+    split_dataset[TTRAIN] = split_dataset[TRAIN].map(
         tokenize_sample,
         remove_columns=[
             "train_question",
@@ -453,23 +460,39 @@ def format_dataset(qa_dataset: pd.DataFrame):
             "doc",
         ],
     )
-    split_dataset["tokenized_train"] = tokenized_train
+    split_dataset[TTEST] = split_dataset[TEST].map(
+        tokenize_sample,
+        remove_columns=[
+            "train_question",
+            "question",
+            "answer",
+            "uri",
+            "section",
+            "headline",
+            "prompt",
+            "doc",
+        ],
+    )
+
     return split_dataset
 
 
-def get_train_and_test_data() -> tuple[Dataset, Dataset]:
+def get_train_and_test_data() -> Dict[str, Dict[str, Dataset]]:
     """
     get_train_and_test_data
     """
     # Apply the function
     train_df = load_training_data()
     split_dataset = format_dataset(train_df)
-    tokenized_train_dataset = split_dataset["tokenized_train"]
-    test_dataset = split_dataset["test"]
-    test_data_dir = f"./test_data/{datetime.now().strftime(r'%Y%m%d%H%M')}"
-    os.makedirs(test_data_dir, exist_ok=True)
-    test_dataset.to_parquet(f"{test_data_dir}/test_data.parquet")
-    return (tokenized_train_dataset, test_dataset)
+
+    datehourminute = datetime.now().strftime(r"%Y%m%d%H%M")
+    basedir = f"./train_test/{datehourminute}"
+
+    for d in TRAIN_DATA_TYPES:
+        os.makedirs(f"{basedir}/{d}", exist_ok=True)
+        split_dataset[d].to_parquet(f"{basedir}/{d}/data.parquet", batch_size=1000)
+
+    return split_dataset
 
 
 def train_model() -> tuple[str, pd.DataFrame]:
@@ -484,7 +507,10 @@ def train_model() -> tuple[str, pd.DataFrame]:
     lora_dir = f"lora_adapters/mistal_lora_{datetime.now().strftime(r'%Y%m%d%H%M')}"
     os.makedirs(f"./{lora_dir}", exist_ok=True)
 
-    train_dataset, test_dataset = get_train_and_test_data()
+    training_data = get_latest_training_data()
+
+    t_train_dataset = training_data[TTRAIN]
+    t_test_dataset = training_data[TTEST]
 
     # Step 5: Load Model and Apply LoRA Fine-Tuning
     base_model_name = "mistralai/Mistral-7B-v0.3"
@@ -527,20 +553,20 @@ def train_model() -> tuple[str, pd.DataFrame]:
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=train_dataset,
-        eval_dataset=test_dataset,
+        train_dataset=t_train_dataset,
+        eval_dataset=t_test_dataset,
         tokenizer=tokenizer,
     )
     trainer.train()
     model.save_pretrained(lora_dir)
-    with open("./lora_adaptors.txt", "a", encoding="utf8") as fh:
+    with open("./lora_adapters.txt", "a", encoding="utf8") as fh:
         fh.write(f"{lora_dir}\n")
 
     # clear the cuda cache
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
-    return (lora_dir, test_dataset)
+    return (lora_dir, training_data)
 
 
 def download_mistral():
@@ -563,62 +589,113 @@ def download_mistral():
     )
 
 
-def test_lora(lora_dir: str, test_data: pd.DataFrame) -> Dict[str, Any]:
+def load_model(lora_dir: str):
+    """Loads base Mistral-7B-v0.3 model and applies a LoRA adapter."""
+    base_model_name = "mistralai/Mistral-7B-v0.3"
+
+    # Load tokenizer and ensure padding token exists
+    tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    # Load base model
+    base_model = AutoModelForCausalLM.from_pretrained(
+        base_model_name, torch_dtype=torch.float16, device_map="auto"
+    )
+
+    # Load LoRA adapter
+    model = PeftModel.from_pretrained(base_model, lora_dir)
+    model = model.merge_and_unload()
+    model.eval()  # Set to evaluation mode
+
+    return model, tokenizer
+
+
+def generate_output(
+    samples: List[Dict[str, Any]], model, tokenizer, device, tokenized=False
+):
+    """Generates text using the model for a batch of samples."""
+
+    if tokenized:
+        # Convert list of tokenized inputs into batched tensors
+        inputs = {k: torch.tensor(v).to(device) for k, v in dict(samples).items()}
+    else:
+        # Construct batched prompts
+        prompts = [sample["question"] for sample in samples]
+        inputs = tokenizer(
+            prompts, return_tensors="pt", padding=True, truncation=True, max_length=512
+        ).to(device)
+
+    with torch.no_grad():
+        output_ids = model.generate(
+            **inputs,
+            max_new_tokens=100,  # Control output length
+            temperature=0.7,  # Control randomness
+            top_k=50,  # Sample from top-k most likely words
+            top_p=0.9,  # Use nucleus sampling
+            repetition_penalty=1.2,  # Reduce phrase repetition
+            do_sample=True,  # Enable sampling
+            num_return_sequences=1,  # Generate a single output per input
+        )
+
+    generated_texts = tokenizer.batch_decode(output_ids, skip_special_tokens=True)
+    return {"generated_answer": generated_texts}
+
+
+def test_lora(lora_dir: str, test_data: Dict[str, Dataset]) -> Dict[str, Any]:
     """
     Loads a base Mistral-7B-v0.3 model and applies a LoRA adapter,
     then evaluates it using the provided test dataset.
 
     Args:
         lora_dir (str): Path to the directory containing the saved LoRA adapter.
-        test_data (pd.DataFrame): Test dataset containing input prompts and expected outputs.
+        test_data (Dict[str, Dataset]): Dictionary containing test datasets.
+            - test_data[TEST]: Raw test dataset (not tokenized, has 'question' and 'answer')
+            - test_data[TTEST]: Tokenized test dataset (has 'input_ids')
 
     Returns:
         Dict[str, Any]: Dictionary with model predictions and validation metrics.
     """
-
-    # Load Base Model & Tokenizer
-    base_model_name = "mistralai/Mistral-7B-v0.3"
-    tokenizer = AutoTokenizer.from_pretrained(base_model_name)
-
-    # Ensure tokenizer has a padding token
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-
-    base_model = AutoModelForCausalLM.from_pretrained(
-        base_model_name, torch_dtype=torch.float16, device_map="auto"
-    )
-
-    # Load LoRA Adapter
-    model = PeftModel.from_pretrained(base_model, lora_dir)
-    model.eval()  # Set to evaluation mode
+    model, tokenizer = load_model(lora_dir)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    def generate_output(sample: Dataset):
-        """Generates text using the model given a prompt."""
-        inputs = tokenizer(
-            sample, return_tensors="pt", padding=True, truncation=True, max_length=512
-        ).to(device)
+    # Determine dataset to use
+    if TTEST in test_data:
+        q_ds = test_data[TTEST]  # Already tokenized dataset
+        tokenized = True
+    elif TEST in test_data:
+        q_ds = test_data[TEST]  # Non-tokenized dataset with questions
+        tokenized = False
+    else:
+        raise ValueError(
+            "test_data must contain either TEST (raw) or TTEST (tokenized)."
+        )
 
-        with torch.no_grad():
-            output_ids = model.generate(**inputs, max_length=512)
-
-        generated_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
-        return {"generated_answer": generated_text}
+    # Create a partial function with model dependencies
+    generate_output_fn = partial(
+        generate_output,
+        model=model,
+        tokenizer=tokenizer,
+        device=device,
+        tokenized=tokenized,
+    )
 
     # Generate predictions
-    results = test_data["question"].map(generate_output)
+    results = q_ds.map(
+        generate_output_fn,
+        batched=True,
+        batch_size=50,
+    )
 
-    # Compare with expected answers (if available)
+    # Extract predictions and expected answers (if available)
     predictions = results["generated_answer"]
-    expected = results["answer"] if "answer" in results.column_names else None
+    expected = test_data[TEST]["answer"] if TEST in test_data else None
 
     # Construct validation dictionary
     output_dict = {
-        "predictions": predictions,
-        "expected": expected if expected else "N/A",
-        "success": all(
-            isinstance(pred, str) and len(pred) > 0 for pred in predictions
-        ),  # Basic check for valid outputs
+        "prediction": predictions,
+        "expected": expected,
+        "success": all(isinstance(pred, str) and len(pred) > 0 for pred in predictions),
     }
 
     if torch.cuda.is_available():
@@ -652,19 +729,30 @@ def get_latest_lora_adapter():
         return file.readline().decode("utf-8").strip()
 
 
-def get_latest_test_data() -> pd.DataFrame:
+def get_latest_training_data(types: List[str] = None) -> Dict[str, pd.DataFrame]:
     """
-    get_latest_test_data
+    get_latest_train_data
     """
     try:
-        dirs = os.listdir("./test_data")
+        base_dir = "./train_test/"
+        dirs = os.listdir(base_dir)
         if len(dirs) == 0:
-            raise OSError("No test data found. Please run the training pipeline first.")
+            raise OSError(
+                "No test data found. Please run get_train_and_test_data() first."
+            )
         dirs.sort()
         latest_dir = dirs[-1]
-        df = pd.read_parquet(f"./test_data/{latest_dir}/test_data.parquet")
+        train_dict: Dict[str, Dataset] = {}
+        if types is None or len(types) == 0:
+            types = TRAIN_DATA_TYPES
+        for d in types:
+            train_dict[d] = Dataset.from_pandas(
+                pd.read_parquet(
+                    f"{base_dir}/{latest_dir}/{d}/data.parquet"
+                ).reset_index(drop=True)
+            )
     except OSError as e:
         raise OSError(
-            "No test data found. Please run the training pipeline first."
+            "No test data found. Please run get_train_and_test_data() first."
         ) from e
-    return df
+    return train_dict
