@@ -63,6 +63,12 @@ def test__get_train_and_test_data():
 def test__train_model():
     """
     test__train_model
+
+        {'train_runtime': 83919.1656, 'train_samples_per_second': 6.434,
+        'train_steps_per_second': 6.434, 'train_loss': 0.17590146832617198,
+        'epoch': 3.0}
+
+        100%|██████████| 539934/539934 [23:18:39<00:00,  6.43it/s]
     """
     # train the model and save/log the lora adapter
     lora_dir, test_data = train_model()
