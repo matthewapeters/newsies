@@ -5,7 +5,7 @@ newsies.pipelines.get_news
 from newsies.ap_news.latest_news import (
     get_latest_news,
     news_loader,
-    headline_loader,
+    #    headline_loader,
 )
 from .task_status import TASK_STATUS
 
@@ -28,9 +28,9 @@ def get_news_pipeline(task_id: str):
         TASK_STATUS[task_id] = "running - step: retrieving and caching news stories"
         news_loader(task_state=TASK_STATUS, task_id=task_id)
 
-        print("\n\t- headlines loader\n")
-        TASK_STATUS[task_id] = "running - step: loading headlines"
-        headline_loader(task_state=TASK_STATUS, task_id=task_id)
-        TASK_STATUS[task_id] = "complete"
+        # print("\n\t- headlines loader\n")
+        # TASK_STATUS[task_id] = "running - step: loading headlines"
+        # headline_loader(task_state=TASK_STATUS, task_id=task_id)
+        # TASK_STATUS[task_id] = "complete"
     except Exception as e:
         TASK_STATUS[task_id] = f"error: {e}"

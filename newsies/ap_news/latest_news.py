@@ -5,7 +5,6 @@ newsies.ap_news.latest_news
 from datetime import datetime
 import time
 import os
-import re
 from typing import Dict
 from random import randint
 from multiprocessing import Pool
@@ -16,26 +15,23 @@ from bs4 import BeautifulSoup
 
 from newsies.targets import DOCUMENT, HEADLINE
 from newsies.chroma_client import CRMADB
+from newsies.redis_client.main import REDIS
 
 from ..document_structures import Headline, Document
 from .sections import SECTIONS
+from .article import Article
 
 # pylint: disable=unidiomatic-typecheck
 
 URL = "https://apnews.com"
 MAX_TRIES = 5
+ARCHIVE = "apnews.com"
 
 
-def path(story_url: str, archive: str = None):
+def path(file: str):
     """path"""
-    today = (
-        datetime.now().strftime(r"%Y%m%d")
-        if archive is None
-        else archive.replace("-", "")
-    )
-    story = story_url.split("/")[-1].split("?")[0]
-    os.makedirs(f"./daily_news/{today}", exist_ok=True)
-    return f"./daily_news/{today}/{story}.txt"
+    os.makedirs(f"./daily_news/{ARCHIVE}", exist_ok=True)
+    return f"./daily_news/{ARCHIVE}/{file}"
 
 
 def get_latest_news() -> Dict[str, Document]:
@@ -50,7 +46,7 @@ def get_latest_news() -> Dict[str, Document]:
         resp = requests.get(f"{URL}/{section}", allow_redirects=True, timeout=5)
         results: bytes = resp.content.decode("utf8")
         # print(results)
-        soup = BeautifulSoup(results, features="lxml")
+        soup = BeautifulSoup(results, features="html.parser")
         if type(soup) == "NoneType":
             continue
         items = soup.find_all("a")
@@ -81,14 +77,9 @@ def get_latest_news() -> Dict[str, Document]:
     urls = list(set([v.url for v in headlines.values()]))
 
     documents: Dict[str, Document] = {
-        path(url)
-        .replace("/", "_")
-        .replace(" ", "_")
-        .replace("-", "_")
-        .replace(".", "_"): Document(
+        url: Document(
             **{
                 "url": url,
-                "uri": path(url),
                 "date": datetime.now().strftime(r"%Y-%m-%d"),
                 "source": "AP News",
                 "target": DOCUMENT,
@@ -102,7 +93,7 @@ def get_latest_news() -> Dict[str, Document]:
         )
         for url in urls
     }
-    pickl_path = path("latest_news").replace(".txt", ".pkl")
+    pickl_path = path("latest_news.pkl")
     with open(pickl_path, "wb") as fh:
         pickle.dump(documents, fh)
     return documents
@@ -148,8 +139,9 @@ def download_article(
 
     if tries > MAX_TRIES:
         return
-    file_path = path(story_url)
-    if os.path.exists(file_path):
+
+    cached_story_path = REDIS.get(story_url)
+    if cached_story_path is not None:
         return
     if backoff == 0:
         backoff = randint(1, 5)
@@ -170,24 +162,18 @@ def download_article(
             )
             return
         case 200:
-            article = BeautifulSoup(article_resp.content.decode("utf8"), "html.parser")
-            with open(file_path, "w", encoding="utf8") as fh:
-                try:
-                    for paragraph in article.find(
-                        class_="RichTextStoryBody RichTextBody"
-                    ).find_all("p"):
-                        p = paragraph.text
-                        # replace unicode quotes and quote-like characters with apostrophe
-                        # https://hexdocs.pm/ex_unicode/Unicode.Category.QuoteMarks.html
-                        p = re.sub(r"[\u0018-\u2E42]", "'", p)
-                        p += "\n"
-                        fh.write(p)
-                    if task_status is not None:
-                        task_status[task_id] = (
-                            f"running: downloaded {doc_id} of {doc_count}"
-                        )
-                except AttributeError:
-                    fh.write("Error parsing article\n")
+            article = Article(
+                archive=ARCHIVE,
+                url=story_url,
+                bs=BeautifulSoup(article_resp.content.decode("utf8"), "html.parser"),
+            )
+            for i, headline in enumerate(headlines):
+                s = sections[i]
+                article.section_headlines[s] = headline
+            article.pickle()
+            article.cache()
+            if task_status is not None:
+                task_status[task_id] = f"running: downloaded {doc_id} of {doc_count}"
         case _:
             print(f"Error getting article: {article_resp.status_code}")
 
@@ -200,7 +186,7 @@ def news_loader(
       - Load news articles
     """
     if documents is None:
-        pikl_path = path("latest_news").replace(".txt", ".pkl")
+        pikl_path = path("latest_news.pkl")
         with open(pikl_path, "rb") as fh:
             documents = pickle.load(fh)
 
@@ -214,7 +200,7 @@ def news_loader(
             ],
         )
 
-    CRMADB.add_documents(documents)
+    # CRMADB.add_documents(documents)
 
 
 def headline_loader(
@@ -229,7 +215,7 @@ def headline_loader(
     if task_state is not None:
         task_state[task_id] = f"runinng - loading {len(documents)} headlines"
     if documents is None:
-        pikl_path = path("latest_news").replace(".txt", ".pkl")
+        pikl_path = path("latest_news.pkl")
         with open(pikl_path, "rb") as fh:
             documents = pickle.load(fh)
 

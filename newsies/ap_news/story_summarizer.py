@@ -218,7 +218,7 @@ def batch_news_summarizer(documents: Dict[str, Document] = None, archive: str = 
     Summarizes multiple news articles concurrently using ProcessPoolExecutor.
     """
     if documents is None:
-        pikl_path = path("latest_news", archive).replace(".txt", ".pkl")
+        pikl_path = path("latest_news.pkl")
         with open(pikl_path, "rb") as fh:
             documents = pickle.load(fh)
 

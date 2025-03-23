@@ -10,28 +10,40 @@ import pickle
 import re
 
 from bs4 import BeautifulSoup
+import requests
+
+from newsies.redis_client import REDIS
+from newsies.targets import ARTICLE
 
 
 class Article:
     """Article"""
 
-    def __init__(self, archive: str, url: str, bs: BeautifulSoup):
+    type = ARTICLE
+
+    def __init__(self, archive: str, url: str, bs: BeautifulSoup = None):
         self.archive: str = archive
         self.url: str = url
-        self.bs = bs
+        if bs is None:
+            resp = requests.get(url, allow_redirects=True, timeout=5)
+            results: bytes = resp.content.decode("utf8")
+            self.bs = BeautifulSoup(results, features="lxml")
+        else:
+            self.bs = bs
+        # these are set by processing the story
+        self.summary: str = ""
+        self.named_entities: List[str] = []
+        self.embeddings: List[float] = []
+        self.section_headlines: Dict[str, str] = {}
+        self.metas: List[Any] = self.bs.find_all("meta")
         # the following are set by the methods below
         self.permutive_data: Dict[str, Any] = self._get_permutive_data()
-        self.metas: List[Any] = bs.find_all("meta")
         self.story: str = self._get_story()
         self.item_id: str = self.permutive_data.get("item_id", "")
-        self.section_headlines: Dict[str, str] = {}
         self.publish_date: datetime = self._get_publish_date()
         self.keywords: List[str] = self._get_keywords()
         self.open_graph: Dict[str, str] = self._get_open_graph()
         self.authors: List[str] = self._get_authors()
-        # these are set by processing the story
-        self.named_entities: List[str] = []
-        self.embeddings: List[float] = []
 
     def _get_permutive_data(self) -> Dict[str, Any]:
         """
@@ -43,7 +55,7 @@ class Article:
             if m.get("name") == "permutive-dataLayer"
         ][0]
         if "category" in pdl and "headline" in pdl:
-            self.section_headlines = pdl["category"] = pdl["headline"]
+            self.section_headlines[pdl["category"]] = pdl["headline"]
         return pdl
 
     def _get_keywords(self) -> List[str]:
@@ -58,6 +70,7 @@ class Article:
             for kw in (m.get("content") or m.get("values")).split(",")
         ]
         keywords.extend(self.permutive_data.get("tags", []))
+        self.named_entities.extend(keywords)
         return list(set(keywords))
 
     def _get_publish_date(self) -> datetime:
@@ -100,7 +113,7 @@ class Article:
             p = paragraph.text
             # replace unicode quotes and quote-like characters with apostrophe
             # https://hexdocs.pm/ex_unicode/Unicode.Category.QuoteMarks.html
-            p = re.sub(r"[\u0018-\u2E42]", "'", p)
+            p = re.sub(r"[\u0018-\u0019]", "'", p)
             story += p + "\n"
         return story
 
@@ -121,3 +134,17 @@ class Article:
         """path"""
         os.makedirs(f"./daily_news/{self.archive}", exist_ok=True)
         return f"./daily_news/{self.archive}/{self.item_id}.pkl"
+
+    def cache(self):
+        """
+        cache
+            Create a redis cache of the article keyed on URL
+            with path to the pickled article
+        """
+        REDIS.set(self.url, self.path())
+
+    def accept(self, visitor: Any):
+        """
+        visit
+        """
+        visitor.visit_article(self)

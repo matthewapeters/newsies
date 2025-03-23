@@ -19,12 +19,14 @@ from sentence_transformers import SentenceTransformer
 import torch
 
 from newsies.ap_news import SECTIONS
+
 from newsies.ap_news.latest_news import path
 from newsies.chromadb_client import ChromaDBClient
 from newsies.chroma_client import CRMADB
 from newsies.document_structures import Document
 from newsies.collections import TAGS
-from newsies import targets
+
+# from newsies import targets
 
 # pylint: disable=broad-exception-caught
 
@@ -65,7 +67,7 @@ def analyze_ngrams_per_section(headlines=None, archive: str = None):
     """
 
     if headlines is None:
-        pikl_path = path("latest_news", archive).replace(".txt", ".pkl")
+        pikl_path = path("latest_news.pkl")
         with open(pikl_path, "rb") as fh:
             headlines = pickle.load(fh)
 
