@@ -2,35 +2,33 @@
 newsies.llm
 """
 
-from gpt4all import GPT4All
-import torch
+from newsies.lora_adapter import load_model
 
 # pylint: disable=global-statement
 
 # Load GPT4All model from local path
-MODEL_PATH = "/home/mpeters/.local/share/nomic.ai/GPT4All/"
-MODEL_NAME = "Meta-Llama-3-8B-Instruct.Q4_0.gguf"
+# MODEL_PATH = "/home/mpeters/.local/share/nomic.ai/GPT4All/"
+# MODEL_NAME = "Meta-Llama-3-8B-Instruct.Q4_0.gguf"
 
 LLM = None
+TOKENIZER = None
 
 
 def init_llm():
     """init_llm"""
-    global LLM
+    global LLM, TOKENIZER
 
-    if LLM is None:
-        device_str = (
-            f"cuda:{torch.cuda.get_device_name(0)}"
-            if torch.cuda.is_available()
-            else "cpu"
-        )
-        print(f"Using device: {device_str}")
-        LLM = GPT4All(
-            model_name=MODEL_NAME,
-            model_path=MODEL_PATH,
-            #    device=device_str,
-            allow_download=False,
-        )
+    if LLM is None or TOKENIZER is None:
+
+        LLM, TOKENIZER = load_model()
+
+
+#        LLM = GPT4All(
+#            model_name=MODEL_NAME,
+#            model_path=MODEL_PATH,
+#            device=device_str,
+#            allow_download=False,
+#        )
 
 
 def identify_themes(uri: str):

@@ -14,16 +14,14 @@ from newsies.pipelines.train_model import (
     train_model,
     test_lora,
     get_train_and_test_data,
-    get_latest_lora_adapter,
     load_training_data,
     format_dataset,
     get_latest_training_data,
-    #    TRAIN,
     TEST,
-    #    TTRAIN,
     TTEST,
     TRAIN_DATA_TYPES,
 )
+from newsies.lora_adapter import get_latest_lora_adapter
 
 # pylint: disable=broad-exception-caught
 

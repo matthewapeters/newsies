@@ -21,7 +21,7 @@ from transformers import (
     Trainer,
     BatchEncoding,
 )
-from peft import LoraConfig, get_peft_model, PeftModel
+from peft import LoraConfig, get_peft_model
 from datasets import Dataset
 import spacy
 import pandas as pd
@@ -29,16 +29,15 @@ import pandas as pd
 
 from newsies.chromadb_client.main import ChromaDBClient
 from newsies import targets
-from newsies.lora_adapter import (
-    get_latest_training_data,
-    TRAIN_DATA_TYPES,
-    TEST,
-    TTEST,
-    TRAIN,
-    TTRAIN,
-)
+from newsies.lora_adapter import load_model
 
 # pylint: disable=broad-exception-raised, broad-exception-caught
+
+TRAIN = "train"
+TEST = "test"
+TTRAIN = "token_train"
+TTEST = "token_test"
+TRAIN_DATA_TYPES = [TRAIN, TEST, TTRAIN, TTEST]
 
 
 def log_memory_usage(stage):
@@ -592,28 +591,6 @@ def download_mistral():
     )
 
 
-def load_model(lora_dir: str):
-    """Loads base Mistral-7B-v0.3 model and applies a LoRA adapter."""
-    base_model_name = "mistralai/Mistral-7B-v0.3"
-
-    # Load tokenizer and ensure padding token exists
-    tokenizer = AutoTokenizer.from_pretrained(base_model_name)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-
-    # Load base model
-    base_model = AutoModelForCausalLM.from_pretrained(
-        base_model_name, torch_dtype=torch.float16, device_map="auto"
-    )
-
-    # Load LoRA adapter
-    model = PeftModel.from_pretrained(base_model, lora_dir)
-    model = model.merge_and_unload()
-    model.eval()  # Set to evaluation mode
-
-    return model, tokenizer
-
-
 def generate_output(
     samples: List[Dict[str, Any]], model, tokenizer, device, tokenized=False
 ):
@@ -705,3 +682,32 @@ def test_lora(lora_dir: str, test_data: Dict[str, Dataset]) -> Dict[str, Any]:
         torch.cuda.empty_cache()
 
     return output_dict
+
+
+def get_latest_training_data(types: List[str] = None) -> Dict[str, pd.DataFrame]:
+    """
+    get_latest_train_data
+    """
+    try:
+        base_dir = "./train_test/"
+        dirs = os.listdir(base_dir)
+        if len(dirs) == 0:
+            raise OSError(
+                "No test data found. Please run get_train_and_test_data() first."
+            )
+        dirs.sort()
+        latest_dir = dirs[-1]
+        train_dict: Dict[str, Dataset] = {}
+        if types is None or len(types) == 0:
+            types = TRAIN_DATA_TYPES
+        for d in types:
+            train_dict[d] = Dataset.from_pandas(
+                pd.read_parquet(
+                    f"{base_dir}/{latest_dir}/{d}/data.parquet"
+                ).reset_index(drop=True)
+            )
+    except OSError as e:
+        raise OSError(
+            "No test data found. Please run get_train_and_test_data() first."
+        ) from e
+    return train_dict
