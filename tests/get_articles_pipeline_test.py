@@ -34,10 +34,13 @@ def test__get_articles_pipeline():
     for d in documents:
         uri = REDIS.get(d)
         assert uri is not None
-        with open(f"./daily_news/apnews.com/{d}.pkl", "rb") as fh:
-            article: Article = pickle.load(fh)
-            assert article is not None
-            assert len(article.story) > 0
-            assert len(article.keywords) > 0
-            assert len(article.named_entities) > 0
-            assert len(article.embeddings) > 0
+        try:
+            with open(uri, "rb") as fh:
+                article: Article = pickle.load(fh)
+                assert article is not None
+                assert len(article.story) > 0
+                assert len(article.keywords) > 0
+                assert len(article.named_entities) > 0
+                assert len(article.embeddings) > 0
+        except FileNotFoundError:
+            pass

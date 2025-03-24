@@ -4,7 +4,13 @@ newsies.pipelines.get_articles
 
 # pylint: disable=broad-exception-caught
 
-from newsies.ap_news.latest_news import get_latest_news, article_loader
+from newsies.ap_news.latest_news import (
+    get_latest_news,
+    article_loader,
+    article_ner,
+    article_summary,
+    article_embeddings,
+)
 
 from .task_status import TASK_STATUS
 
@@ -27,7 +33,15 @@ def get_articles_pipeline(task_id: str):
 
         print("\n\t- article NER\n")
         TASK_STATUS[task_id] = "running - step: detecting named entities in articles"
-        # article_ner(task_state=TASK_STATUS, task_id=task_id)
+        article_ner(task_state=TASK_STATUS, task_id=task_id)
+
+        print("\n\t- article summary\n")
+        TASK_STATUS[task_id] = "running - step: generating article summaries"
+        article_summary(task_state=TASK_STATUS, task_id=task_id)
+
+        print("\n\t- article embeddings\n")
+        TASK_STATUS[task_id] = "running - step: generating embeddings"
+        article_embeddings(task_state=TASK_STATUS, task_id=task_id)
 
         TASK_STATUS[task_id] = "complete"
     except Exception as e:

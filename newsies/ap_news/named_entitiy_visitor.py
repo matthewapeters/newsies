@@ -33,7 +33,7 @@ from newsies.ap_news.article import Article
 #  WORK_OF_ART	Books, songs, films, paintings, etc.
 
 
-# pylint: disable=broad-exception-caught
+# pylint: disable=broad-exception-caught, broad-exception-raised
 
 DEVICE_STR = "cuda" if torch.cuda.is_available() else "cpu"
 embedding_model = SentenceTransformer(
@@ -93,15 +93,19 @@ class NamedEntityVisistor:
         """
         node.accept(self)
 
-    def visist_article(self, article: Article):
+    def visit_article(self, article: Article):
         """
         visit_article
         """
-        docs = list(article.section_headlines.values())
+        docs = [h for hl in list(article.section_headlines.values()) for h in hl]
         docs.append(article.story)
         docs.append(article.summary)
-        for d in docs:
-            article.named_entities.extend(detect_named_entities(nlp(d)))
+        d = ""
+        try:
+            for d in docs:
+                article.named_entities.extend(detect_named_entities(nlp(d)))
+        except Exception as e:
+            raise Exception(f"NamedEntityVisistor {e}  {d}") from e
 
 
 def detect_named_entities(doc: Doc) -> Counter:
@@ -112,7 +116,7 @@ def detect_named_entities(doc: Doc) -> Counter:
     named_entities = Counter()
     for ent in doc.ents:
         if any(token.pos_ in SUPPORTED_ENTITY_TYPES for token in ent):
-            named_entities[ent.text] += 1  # Count proper named entities
+            named_entities[ent.text] += 1  # Count named entities
         else:
             # Remove stopwords from non-proper-noun entities
             tokens = [token.text for token in ent if not token.is_stop]
