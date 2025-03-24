@@ -3,13 +3,15 @@ newsies.ap_news.named_entity_visitor
 """
 
 from collections import Counter
+from datetime import datetime
 
 import spacy
 from spacy.tokens import Doc
-from sentence_transformers import SentenceTransformer
 import torch
 
 from newsies.ap_news.article import Article
+
+# pylint: disable=global-statement
 
 #  Entity Type	Description
 #
@@ -35,14 +37,8 @@ from newsies.ap_news.article import Article
 
 # pylint: disable=broad-exception-caught, broad-exception-raised
 
-DEVICE_STR = "cuda" if torch.cuda.is_available() else "cpu"
-embedding_model = SentenceTransformer(
-    "all-MiniLM-L6-v2", device=DEVICE_STR
-)  # Fast and good quality
+NLP = None
 
-
-# Load spaCy model for English
-nlp = spacy.load("en_core_web_sm")
 
 DATE = "DATE"
 EVENT = "EVENT"
@@ -97,13 +93,22 @@ class NamedEntityVisistor:
         """
         visit_article
         """
+        global NLP
+
+        if NLP is None:
+            # Load spaCy model for English
+            NLP = spacy.load("en_core_web_sm")
+
+        if __name__ in article.pipelines:
+            return
         docs = [h for hl in list(article.section_headlines.values()) for h in hl]
         docs.append(article.story)
         docs.append(article.summary)
         d = ""
         try:
             for d in docs:
-                article.named_entities.extend(detect_named_entities(nlp(d)))
+                article.named_entities.extend(detect_named_entities(NLP(d)))
+            article.pipelines[__name__] = datetime.now().isoformat()
         except Exception as e:
             raise Exception(f"NamedEntityVisistor {e}  {d}") from e
 

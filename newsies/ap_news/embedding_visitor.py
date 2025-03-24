@@ -2,6 +2,7 @@
 newsies.ap_news.embedding_visitor
 """
 
+from datetime import datetime
 import json
 import math
 from typing import Dict, List
@@ -40,6 +41,8 @@ class EmbeddingVisitor:
         """
         visit_article
         """
+        if __name__ in article.pipelines:
+            return
         to_embed = list(article.section_headlines.values())
         to_embed.append(article.story)
         to_embed.append(article.summary)
@@ -48,6 +51,7 @@ class EmbeddingVisitor:
         for te in to_embed:
             embeddings.append(embedding_model.encode(te))
         article.embeddings = embeddings
+        article.pipelines[__name__] = datetime.now().isoformat()
 
     def compute_tfidf(self):
         """

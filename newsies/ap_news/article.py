@@ -78,6 +78,10 @@ class Article:
         self.named_entities: List[str] = []
         self.embeddings: List[float] = []
         self.section_headlines: Dict[str, str] = {}
+        # visitors create their own entry in self.pipelines to signify completion
+        # minimizes re-processing
+        self.pipelines: Dict[str, str] = {}
+
         self.metas: List[Meta] = [
             m
             for mm in self.bs.find_all("meta")

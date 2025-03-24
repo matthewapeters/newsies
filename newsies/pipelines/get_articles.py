@@ -7,10 +7,10 @@ newsies.pipelines.get_articles
 from newsies.ap_news.latest_news import (
     get_latest_news,
     article_loader,
-    article_ner,
     article_summary,
-    article_embeddings,
 )
+from newsies.ap_news.article_ner import article_ner
+from newsies.ap_news.article_embeddings import article_embeddings
 
 from .task_status import TASK_STATUS
 

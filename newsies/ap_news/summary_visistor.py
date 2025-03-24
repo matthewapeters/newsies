@@ -2,6 +2,7 @@
 newsies.ap_news.summary_visistory
 """
 
+from datetime import datetime
 from typing import List
 
 import torch
@@ -43,7 +44,10 @@ class SummaryVisitor:
         """
         visit_article
         """
+        if __name__ in article.pipelines:
+            return
         article.summary = summarize_story(article.story)
+        article.pipelines[__name__] = datetime.now().isoformat()
 
     def summarize(self, text: str) -> str:
         """

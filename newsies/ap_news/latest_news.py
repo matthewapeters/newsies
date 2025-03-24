@@ -3,24 +3,25 @@ newsies.ap_news.latest_news
 """
 
 from datetime import datetime
-import time
-import os
-from typing import Dict
-from random import randint
 from multiprocessing import Pool
+from random import randint
+from typing import Dict
+import os
 import pickle
+import time
 
-import requests
 from bs4 import BeautifulSoup
+import requests
+import torch
 
 from newsies.targets import DOCUMENT, HEADLINE
-from newsies.chroma_client import CRMADB
-from newsies.redis_client.main import REDIS
 
-from ..document_structures import Headline, Document
+# from newsies.chroma_client import CRMADB
+from newsies.redis_client.main import REDIS
+from newsies.document_structures import Headline, Document
+
 from .sections import SECTIONS
 from .article import Article
-from .named_entitiy_visitor import NamedEntityVisistor
 from .embedding_visitor import EmbeddingVisitor
 from .summary_visistor import SummaryVisitor
 
@@ -230,104 +231,6 @@ def article_loader(
         )
 
 
-def detect_named_entities(
-    story_url: str,
-    task_status: dict = None,
-    task_id: str = "",
-    doc_id: int = 0,
-    doc_count: int = 0,
-):
-    """
-    detect_named_entities
-    """
-    uri = REDIS.get(story_url)
-    with open(uri, "rb") as fh:
-        article = pickle.load(fh)
-
-    v = NamedEntityVisistor()
-    v.visit(article)
-
-    article.pickle()
-    if task_status is not None:
-        task_status[task_id] = f"running: NER {doc_id} of {doc_count}"
-
-
-def article_ner(
-    documents: Dict[str, Document] = None, task_state: dict = None, task_id: str = ""
-):
-    """
-    article_ner
-    """
-    if documents is None:
-        pikl_path = path("latest_news.pkl")
-        with open(pikl_path, "rb") as fh:
-            documents = pickle.load(fh)
-
-    docs_count = len(documents)
-    with Pool(processes=4) as ppool:
-        ppool.starmap(
-            detect_named_entities,
-            [
-                (
-                    v.url,
-                    task_state,  # task_status
-                    task_id,  # task_id
-                    i,  # doc_id
-                    docs_count,  # doc_count
-                )
-                for i, v in enumerate(documents.values())
-            ],
-        )
-
-
-def generate_embeddings(
-    story_url: str,
-    task_status: dict = None,
-    task_id: str = "",
-    doc_id: int = 0,
-    doc_count: int = 0,
-):
-    """
-    generate_embeddings
-    """
-    uri = REDIS.get(story_url)
-    with open(uri, "rb") as fh:
-        article = pickle.load(fh)
-
-    v = EmbeddingVisitor()
-    v.visit(article)
-    article.pickle()
-    if task_status is not None:
-        task_status[task_id] = f"running: embeddings {doc_id} of {doc_count}"
-
-
-def article_embeddings(
-    documents: Dict[str, Document] = None, task_state: dict = None, task_id: str = ""
-):  # pylint: disable=unused-argument
-    """
-    article_embeddings
-    """
-    if documents is None:
-        pikl_path = path("latest_news.pkl")
-        with open(pikl_path, "rb") as fh:
-            documents = pickle.load(fh)
-
-    with Pool(processes=4) as ppool:
-        ppool.starmap(
-            generate_embeddings,
-            [
-                (
-                    v.url,
-                    task_state,  # task_status
-                    task_id,  # task_id
-                    i,  # doc_id
-                    len(documents),  # doc_count
-                )
-                for i, v in enumerate(documents.values())
-            ],
-        )
-
-
 def generate_summary(
     story_url: str,
     task_status: dict = None,
@@ -340,7 +243,7 @@ def generate_summary(
     """
     uri = REDIS.get(story_url)
     with open(uri, "rb") as fh:
-        article = pickle.load(fh)
+        article: Article = pickle.load(fh)
 
     v = SummaryVisitor()
     v.visit(article)
@@ -374,6 +277,9 @@ def article_summary(
                 for i, v in enumerate(documents.values())
             ],
         )
+
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 def news_loader(
@@ -434,6 +340,6 @@ def headline_loader(
             h_doc.target = HEADLINE
             headlines[f"{doc_id}_hl{headline_idx}"] = h_doc
 
-    CRMADB.add_documents(headlines)
+    # CRMADB.add_documents(headlines)
     if task_state is not None:
         task_state[task_id] = f"runinng - {len(documents)} headlines loaded"
