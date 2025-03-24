@@ -6,11 +6,11 @@ newsies.pipelines.get_articles
 
 from newsies.ap_news.latest_news import (
     get_latest_news,
-    article_loader,
-    article_summary,
 )
 from newsies.ap_news.article_ner import article_ner
 from newsies.ap_news.article_embeddings import article_embeddings
+from newsies.ap_news.article_summary import article_summary
+from newsies.ap_news.article_loader import article_loader
 
 from .task_status import TASK_STATUS
 

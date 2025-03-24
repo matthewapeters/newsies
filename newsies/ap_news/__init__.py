@@ -8,9 +8,12 @@ from .story_summarizer import (
 )
 from .latest_news import (
     get_latest_news,
-    download_article,
-    news_loader,
 )
+from .article_loader import article_loader
+from .article_ner import article_ner
+from .article_summary import article_summary
+from .article import Article
+
 from .sections import SECTIONS
 from .delve_section_ngrams import (
     analyze_ngrams_per_section,

@@ -7,7 +7,6 @@ from datetime import datetime
 
 import spacy
 from spacy.tokens import Doc
-import torch
 
 from newsies.ap_news.article import Article
 

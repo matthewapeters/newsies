@@ -92,34 +92,6 @@ def run_analyze(task_id: str, archive: str = None):
         LOCK.release()
 
 
-@router_v1.get("/run/get-articles")
-@require_session
-async def run_get_articles_pipeline(
-    request: Request,
-    background_tasks: BackgroundTasks,
-):
-    """
-    run_get_articles_pipeline
-    run the get-articles pipeline
-    the pipeline checks the Associated Press website for any articles in each of its sections.
-    Articles are then downloaded to local cache and embedded in search engine
-    """
-    task_id = str(uuid.uuid4())
-    username = request.cookies[USER_COOKIE_NAME]
-    sess = request.cookies[SESSION_COOKIE_NAME]
-    TASK_STATUS[task_id] = {
-        "session_id": sess,
-        "status": "queued",
-        "task": "get-articles",
-        "username": username,
-    }
-    background_tasks.add_task(run_get_articles, task_id)
-    return {
-        "message": "getting latest news from Associated Press",
-        "task_id": task_id,
-    }  # noqa
-
-
 @router_v1.get("/run/get-news")
 @require_session
 async def run_get_news_pipeline(
@@ -141,7 +113,7 @@ async def run_get_news_pipeline(
         "task": "get-news",
         "username": username,
     }
-    background_tasks.add_task(run_get_news, task_id)
+    background_tasks.add_task(run_get_articles, task_id)
     return {"message": "getting latest news from Associated Press", "task_id": task_id}
 
 
