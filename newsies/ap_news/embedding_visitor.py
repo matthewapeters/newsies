@@ -11,8 +11,9 @@ from sentence_transformers import SentenceTransformer
 
 from newsies.ap_news.article import Article
 from newsies.collections import TAGS
-from newsies.ap_news import SECTIONS
 from newsies.chromadb_client import ChromaDBClient
+
+from .sections import SECTIONS
 
 # pylint: disable=broad-exception-caught
 
