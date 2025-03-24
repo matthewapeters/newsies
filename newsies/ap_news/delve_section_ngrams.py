@@ -60,7 +60,7 @@ def extract_ngrams(text: str, n=30):
     return ngram_freq
 
 
-def analyze_ngrams_per_section(headlines=None, archive: str = None):
+def analyze_ngrams_per_section(headlines=None):
     """
     analyze_ngrams_per_section
       - read each of the news stories

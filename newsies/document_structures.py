@@ -35,7 +35,7 @@ class Document:
     """
 
     url: str = None
-    uri: str = None
+    #    uri: str = None
     date: str = None
     source: str = None
     text: str = None
@@ -46,7 +46,7 @@ class Document:
     def __init__(self, *args, **kwargs):
         # the following are created in the initial routines
         self.url = kwargs["url"]
-        self.uri = kwargs["uri"]
+        # self.uri = kwargs["uri"]
         self.date = kwargs["date"]
         self.target = kwargs["target"]
         self.headlines = kwargs["headlines"]
@@ -61,7 +61,7 @@ class Document:
         """
         return {
             "url": self.url,
-            "uri": self.uri,
+            # "uri": self.uri,
             "date": self.date,
             "target": self.target,
             "headlines": self.headlines.copy(),

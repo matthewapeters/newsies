@@ -16,6 +16,49 @@ from newsies.redis_client import REDIS
 from newsies.targets import ARTICLE
 
 
+class Meta:
+    """
+    Meta
+        a simple structure to represent a meta tag
+    """
+
+    def __init__(self):
+        self.name = ""
+        self.value = ""
+        self.values = ""
+        self.property = ""
+
+    def get(self, attr, else_str: str = None) -> str:
+        """
+        get
+        """
+        match attr:
+            case "name" | "property":
+                return self.name
+            case "value" | "content" | "values":
+                return self.value
+            case _:
+                return else_str
+
+    def __repr__(self):
+        return (
+            f"Meta('name' {self.name}, 'value' {self.value}, "
+            f"'values' {self.values}, 'property' {self.property})"
+        )
+
+
+def scrub_meta(meta: Any) -> Dict[str, str]:
+    """
+    scrub_meta
+    """
+    m = Meta()
+    m.name = meta.get("name", "")
+    m.value = meta.get("content", "")
+    m.values = meta.get("values", "")
+    m.property = meta.get("property", "")
+    return m
+
+
 class Article:
     """Article"""
 
@@ -35,7 +78,12 @@ class Article:
         self.named_entities: List[str] = []
         self.embeddings: List[float] = []
         self.section_headlines: Dict[str, str] = {}
-        self.metas: List[Any] = self.bs.find_all("meta")
+        self.metas: List[Meta] = [
+            m
+            for mm in self.bs.find_all("meta")
+            for m in [scrub_meta(mm)]
+            if m is not None
+        ]
         # the following are set by the methods below
         self.permutive_data: Dict[str, Any] = self._get_permutive_data()
         self.story: str = self._get_story()
@@ -50,12 +98,17 @@ class Article:
         _get_permutive_data
         """
         pdl = [
-            json.loads(m["content"])
-            for m in self.metas
-            if m.get("name") == "permutive-dataLayer"
-        ][0]
+            json.loads(m.value) for m in self.metas if m.name == "permutive-dataLayer"
+        ]
+        if len(pdl) == 0:
+            return {}
+        pdl = pdl[0]
         if "category" in pdl and "headline" in pdl:
-            self.section_headlines[pdl["category"]] = pdl["headline"]
+            section = pdl["category"].lower()
+            if section not in self.section_headlines:
+                self.section_headlines[section] = [pdl["headline"]]
+            else:
+                self.section_headlines[section].append(pdl["headline"])
         return pdl
 
     def _get_keywords(self) -> List[str]:

@@ -20,24 +20,37 @@ from newsies.redis_client.main import REDIS
 from ..document_structures import Headline, Document
 from .sections import SECTIONS
 from .article import Article
+from .named_entitiy_visitor import NamedEntityVisistor
+from .embedding_visitor import EmbeddingVisitor
 
-# pylint: disable=unidiomatic-typecheck
+# pylint: disable=unidiomatic-typecheck, broad-exception-caught
 
 URL = "https://apnews.com"
 MAX_TRIES = 5
 ARCHIVE = "apnews.com"
+os.makedirs(f"./daily_news/{ARCHIVE}", exist_ok=True)
 
 
 def path(file: str):
     """path"""
-    os.makedirs(f"./daily_news/{ARCHIVE}", exist_ok=True)
     return f"./daily_news/{ARCHIVE}/{file}"
 
 
 def get_latest_news() -> Dict[str, Document]:
     """
     get_latest_news
+        if latest_news.pkl is less than one hour old, retuns the pickled
+        documents
+        otherwise, scrapes the AP News site for the latest news links
+        and pickles the documents for downstream use
     """
+    if (
+        os.path.exists(path("latest_news.pkl"))
+        and time.time() - os.path.getmtime(path("latest_news.pkl")) < 3600
+    ):
+        print("Using cached news")
+        with open(path("latest_news.pkl"), "rb") as fh:
+            return pickle.load(fh)
 
     headlines: Dict[str, Headline] = {}
 
@@ -84,10 +97,10 @@ def get_latest_news() -> Dict[str, Document]:
                 "source": "AP News",
                 "target": DOCUMENT,
                 "headlines": list(
-                    set([v.headline for v in headlines.values() if v.url == url])
+                    [v.headline for v in headlines.values() if v.url == url]
                 ),
                 "sections": list(
-                    set([v.section for v in headlines.values() if v.url == url])
+                    [v.section for v in headlines.values() if v.url == url]
                 ),
             }
         )
@@ -162,20 +175,156 @@ def download_article(
             )
             return
         case 200:
-            article = Article(
-                archive=ARCHIVE,
-                url=story_url,
-                bs=BeautifulSoup(article_resp.content.decode("utf8"), "html.parser"),
-            )
-            for i, headline in enumerate(headlines):
-                s = sections[i]
-                article.section_headlines[s] = headline
-            article.pickle()
-            article.cache()
-            if task_status is not None:
-                task_status[task_id] = f"running: downloaded {doc_id} of {doc_count}"
+            try:
+                article = Article(
+                    archive=ARCHIVE,
+                    url=story_url,
+                    bs=BeautifulSoup(
+                        article_resp.content.decode("utf8"), "html.parser"
+                    ),
+                )
+                for i, headline in enumerate(headlines):
+                    s = sections[i]
+                    article.section_headlines[s] = headline
+                article.pickle()
+                article.cache()
+                if task_status is not None:
+                    task_status[task_id] = (
+                        f"running: downloaded {doc_id} of {doc_count}"
+                    )
+            except Exception as e:
+                print(f"Error processing article: {e}")
         case _:
             print(f"Error getting article: {article_resp.status_code}")
+
+
+def article_loader(
+    documents: Dict[str, Document] = None, task_state: dict = None, task_id: str = ""
+):
+    """
+    news_loader:
+      - Load news articles
+    """
+    if documents is None:
+        pikl_path = path("latest_news.pkl")
+        with open(pikl_path, "rb") as fh:
+            documents = pickle.load(fh)
+
+    docs_count = len(documents)
+    with Pool(processes=4) as ppool:
+        ppool.starmap(
+            download_article,
+            [
+                (
+                    (v.url, v.headlines, v.sections),  # work
+                    0,  # backoff
+                    0,  # tries
+                    task_state,  # task_status
+                    task_id,  # task_id
+                    i,  # doc_id
+                    docs_count,  # doc_count
+                )
+                for i, v in enumerate(documents.values())
+            ],
+        )
+
+
+def detect_named_entities(
+    story_url: str,
+    task_status: dict = None,
+    task_id: str = "",
+    doc_id: int = 0,
+    doc_count: int = 0,
+):
+    """
+    detect_named_entities
+    """
+    uri = REDIS.get(story_url)
+    with open(uri, "rb") as fh:
+        article = pickle.load(fh)
+
+    v = NamedEntityVisistor()
+    v.visit(article)
+
+    article.pickle()
+    if task_status is not None:
+        task_status[task_id] = f"running: NER {doc_id} of {doc_count}"
+
+
+def article_ner(
+    documents: Dict[str, Document] = None, task_state: dict = None, task_id: str = ""
+):
+    """
+    article_ner
+    """
+    if documents is None:
+        pikl_path = path("latest_news.pkl")
+        with open(pikl_path, "rb") as fh:
+            documents = pickle.load(fh)
+
+    docs_count = len(documents)
+    with Pool(processes=4) as ppool:
+        ppool.starmap(
+            detect_named_entities,
+            [
+                (
+                    v.url,
+                    task_state,  # task_status
+                    task_id,  # task_id
+                    i,  # doc_id
+                    docs_count,  # doc_count
+                )
+                for i, v in enumerate(documents.values())
+            ],
+        )
+
+
+def generate_embeddings(
+    story_url: str,
+    task_status: dict = None,
+    task_id: str = "",
+    doc_id: int = 0,
+    doc_count: int = 0,
+):
+    """
+    generate_embeddings
+    """
+    uri = REDIS.get(story_url)
+    with open(uri, "rb") as fh:
+        article = pickle.load(fh)
+
+    v = EmbeddingVisitor()
+    v.visit(article)
+    article.pickle()
+    if task_status is not None:
+        task_status[task_id] = f"running: embeddings {doc_id} of {doc_count}"
+
+
+def article_embeddings(
+    documents: Dict[str, Document] = None, task_state: dict = None, task_id: str = ""
+):  # pylint: disable=unused-argument
+    """
+    article_embeddings
+    """
+    if documents is None:
+        pikl_path = path("latest_news.pkl")
+        with open(pikl_path, "rb") as fh:
+            documents = pickle.load(fh)
+
+    with Pool(processes=4) as ppool:
+        ppool.starmap(
+            generate_embeddings,
+            [
+                (
+                    v.url,
+                    task_state,  # task_status
+                    task_id,  # task_id
+                    i,  # doc_id
+                    len(documents),  # doc_count
+                )
+                for i, v in enumerate(documents.values())
+            ],
+        )
 
 
 def news_loader(
@@ -192,10 +341,18 @@ def news_loader(
 
     docs_count = len(documents)
     with Pool(processes=4) as ppool:
-        ppool.map(
+        ppool.starmap(
             download_article,
             [
-                (v.url, v.headlines, v.sections, task_state, task_id, i, docs_count)
+                (
+                    (v.url, v.headlines, v.sections),
+                    0,
+                    0,
+                    task_state,
+                    task_id,
+                    i,
+                    docs_count,
+                )
                 for i, v in enumerate(documents.values())
             ],
         )

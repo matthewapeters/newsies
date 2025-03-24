@@ -95,6 +95,9 @@ CHROMA_SERVER_AUTHN_CREDENTIALS='${CHROMADB_ENCRYPTED_CREDS}'
     get-news)
         python -m newsies.main get-news
         ;;
+    get-articles)
+        python -m newsies.main get-articles
+        ;;
     analyze)
 
         export NLTK_DATA="~/nltk_data"
@@ -158,6 +161,7 @@ CHROMA_SERVER_AUTHN_CREDENTIALS='${CHROMADB_ENCRYPTED_CREDS}'
 	echo
         echo "CLI Commands"
         echo -e "\tget-news"
+        echo -e "\tget-articles"
         echo -e "\tanalyze"
         echo -e "\tcli"
         echo -e "\tup"

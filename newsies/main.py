@@ -4,6 +4,9 @@ newsies.main
 
 import sys
 import uuid
+import os
+import pwd
+
 
 # pylint: disable=import-outside-toplevel
 
@@ -87,11 +90,31 @@ if __name__ == "__main__":
         usage()
     else:
         TASK_ID = str(uuid.uuid4())
+        USER_ID = pwd.getpwuid(os.getuid())[0]
         match sys.argv[1]:
             case "get-news":
                 from .pipelines import get_news_pipeline
+                from newsies.pipelines.task_status import TASK_STATUS
 
+                TASK_STATUS[TASK_ID] = {
+                    "session_id": "N/A",
+                    "status": "queued",
+                    "task": "get-articles",
+                    "username": USER_ID,
+                }
                 get_news_pipeline(task_id=TASK_ID)
+            case "get-articles":
+                from .pipelines import get_articles_pipeline
+                from newsies.pipelines.task_status import TASK_STATUS
+
+                TASK_STATUS[TASK_ID] = {
+                    "session_id": "N/A",
+                    "status": "queued",
+                    "task": "get-articles",
+                    "username": USER_ID,
+                }
+                get_articles_pipeline(task_id=TASK_ID)
+
             case "analyze":
                 from .pipelines import analyze_pipeline
 
