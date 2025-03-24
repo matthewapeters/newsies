@@ -47,7 +47,7 @@ def article_summary(
         with open(pikl_path, "rb") as fh:
             documents = pickle.load(fh)
 
-    with Pool(processes=4) as ppool:
+    with Pool(processes=2) as ppool:
         ppool.starmap(
             generate_summary,
             [

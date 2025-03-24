@@ -6,11 +6,10 @@ import json
 from typing import Dict, List, Union
 import uuid
 
-from newsies.llm import LLM as llm
+from newsies.llm import LLM as llm, init_llm
 from newsies.chromadb_client import ChromaDBClient, get_all_headlines
 from newsies.classify import prompt_analysis
 from newsies.session.turn import Turn
-from newsies import actions
 from newsies import targets
 
 # pylint: disable=broad-exception-caught, protected-access, unnecessary-lambda, too-many-instance-attributes, invalid-name
@@ -183,6 +182,7 @@ class Session:
                 pass
 
         prompt: str = turn.get_prompt()
+        init_llm()
         turn.response = llm.generate(prompt)
         self.add(turn)
         return turn.response

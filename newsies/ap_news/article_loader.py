@@ -6,7 +6,7 @@ from multiprocessing import Pool
 import os
 import pickle
 from random import randint
-from time import time
+import time
 from typing import Dict
 
 from bs4 import BeautifulSoup
