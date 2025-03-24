@@ -93,17 +93,6 @@ if __name__ == "__main__":
         USER_ID = pwd.getpwuid(os.getuid())[0]
         match sys.argv[1]:
             case "get-news":
-                from .pipelines import get_news_pipeline
-                from newsies.pipelines.task_status import TASK_STATUS
-
-                TASK_STATUS[TASK_ID] = {
-                    "session_id": "N/A",
-                    "status": "queued",
-                    "task": "get-articles",
-                    "username": USER_ID,
-                }
-                get_news_pipeline(task_id=TASK_ID)
-            case "get-articles":
                 from .pipelines import get_articles_pipeline
                 from newsies.pipelines.task_status import TASK_STATUS
 
