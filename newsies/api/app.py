@@ -64,20 +64,6 @@ def run_get_articles(*args, **kwargs):
         LOCK.release()
 
 
-def run_get_news(*args, **kwargs):
-    """
-    run_get_news
-    """
-    from newsies.pipelines import get_news_pipeline
-
-    LOCK.acquire()
-    try:
-        get_news_pipeline(*args, **kwargs)
-        gc.collect()
-    finally:
-        LOCK.release()
-
-
 def run_analyze(task_id: str, archive: str = None):
     """
     run_analyze
