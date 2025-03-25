@@ -6,6 +6,8 @@ from multiprocessing import Pool
 import pickle
 from typing import Dict
 
+import torch
+
 from newsies.redis_client import REDIS
 from newsies.document_structures import Document
 
@@ -62,3 +64,5 @@ def article_ner(
                 for i, v in enumerate(documents.values())
             ],
         )
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
