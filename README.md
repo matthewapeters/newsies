@@ -18,6 +18,7 @@ for public viewing.  It may become open-source in the future.
 ## Application Flow
 
 ![application sequence](./docs/Newsies_API_Sequence.png)
+[I use sequencediagram.org to generate UML Sequence Diagrams](<https://sequencediagram.org/>)
 
 NOTE: I am using FastAPI as its APIs are largely self-documenting.
 
@@ -90,3 +91,12 @@ API Server
  api    launch FastAPI session (shows interactive API docs)$ ./scripts/newsies 
 
 ```
+
+### Technologies Used in Newsies
+
+![python logo](./docs/python_logo.png) Python  
+![docker logo](./docs/docker.png) Docker  
+![fastAPI](./docs/fastapi-logo-teal.png) FastAPI  
+![Redis](./docs/redis-Logotype.svg) Redis  
+![beautifulsoup logo](./docs/tap-beautifulsoup.png) Beautifulsoup4  
+![huggingface logo](./docs/huggingface_logo-noborder.svg) HuggingFace  
