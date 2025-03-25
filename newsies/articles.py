@@ -7,7 +7,6 @@ import os
 import pickle
 from typing import Any, Dict, List, Tuple, Union
 
-import numpy as np
 import networkx as nx
 
 from newsies.collections import NEWS
@@ -58,7 +57,12 @@ class Archive:
         cdb = ChromaDBClient()
         cdb.collection_name = NEWS
         keys = self.collection.keys()
-        network = [{k: get_nearest_neighbors(cdb.collection, k, 5)} for k in keys]
+        network: List[Dict[str, List[Tuple[str, float]]]] = [
+            {k: get_nearest_neighbors(cdb.collection, k, 5)} for k in keys
+        ]
+        graph = build_similarity_graph(network=network)
+        with open(f"{ARCHIVE}/knn.pkl", "wb") as pkl:
+            pickle.dump(graph, pkl)
 
 
 def get_nearest_neighbors(collection, article_id, k=5) -> List[Tuple[str, float]]:
@@ -83,3 +87,25 @@ def get_nearest_neighbors(collection, article_id, k=5) -> List[Tuple[str, float]
     ]  # Remove self-match
 
     return neighbors  # List of (neighbor_id, similarity_score)
+
+
+def build_similarity_graph(
+    network: List[Dict[str, List[Tuple[str, float]]]], k=5, similarity_threshold=0.8
+):
+    """
+    Constructs a NetworkX graph where articles are nodes and edges are similarity-based connections.
+    """
+    grph = nx.Graph()
+
+    for article_id, neighbors in network.items():
+        grph.add_node(article_id)  # Add article as a node
+
+        # Retrieve nearest neighbors
+
+        for neighbor_id, similarity in neighbors:
+            if (
+                similarity >= similarity_threshold
+            ):  # Filter edges by similarity threshold
+                grph.add_edge(article_id, neighbor_id, weight=similarity)
+
+    return grph

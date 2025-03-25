@@ -4,12 +4,15 @@ newsies.api.app
 """
 
 from typing import Callable
+import pickle
+import json
 import gc
 import uuid
 from datetime import datetime
 from functools import wraps
 
 from pydantic import BaseModel
+import networkx as nx
 
 from fastapi import FastAPI, BackgroundTasks, Request, HTTPException, Path, APIRouter
 from fastapi.responses import RedirectResponse
@@ -284,6 +287,20 @@ async def post_prompt(request: Request, user_prompt: Prompt):
     response = session.query(user_prompt.prompt)
     cache_session(session)
     return response
+
+
+@app.get("/graph_data")
+@require_session
+def get_graph_data():
+    """
+    Returns graph data in Cytoscape JSON format.
+    """
+    with open("./daily_news/apnews.com/knn.pkl", "rb") as pkl:
+        grph = pickle.load(pkl)
+    nodes = [{"data": {"id": str(n), "label": f"Article {n}"}} for n in grph.nodes]
+    edges = [{"data": {"source": str(u), "target": str(v)}} for u, v in grph.edges]
+
+    return json.dumps(nodes + edges)
 
 
 app.include_router(router_v1, prefix="/v1")
