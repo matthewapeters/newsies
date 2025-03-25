@@ -13,12 +13,80 @@ It is anticipated that this will provide an API service for projects like Jarvus
 This is a personal research project using open-source and freely-available technologies.  It has been made available
 for public viewing.  It may become open-source in the future.
 
-## Tech Stack
-
- ![tech stack](./docs/newsies.png)
-
  NOTE: Models are (c) their respective owners and may not be used commercially without appropriate licensing
 
 ## Application Flow
 
-![application sequence](./docs/newsies_sequence.png)
+![application sequence](./docs/Newsies_API_Sequence.png)
+
+NOTE: I am using FastAPI as its APIs are largely self-documenting.
+
+## Command-Line
+
+Services can be started and stopped from the command line, and pipelines can be initiated from the CLI as well.
+
+All commands start with invoking `./scripts/newsies <command>`.
+
+```bash
+$ ./scripts/newsies 
++----------------------------------------+
+|                                        |
+|             .......                    |
+|            .~~~~~~~~..                 |
+|           .~.~~~~~.......              |
+|           .~~~~... ..   .              |
+|           .~~~...~:~~~.                |
+|           .~. .~+:+:~~.                |
+|              ..:::+~~.                 |
+|           ~:::~::~:~~~~~~~..           |
+|         .=o=+==+~:+++++=====+:.        |
+|        .o==++=+~~=====+===+=+=+.       |
+|       ~o===+++~.+====++==++++++++~     |
+|      ~o===+:~~.:o===++::+~::=++++=:    |
+|      =o==+~~~~+===+:+++~::..::+==+:    |
+|     .=oo=+:::::::~~~::+.~~  .+==++~    |
+|      :====+:=o+.......  . .~==++:.     |
+|      :o===++o=+~ ..... .~:+=+:~+.      |
+|     .=oo::=+=o+~ .... .:+++:.          |
+|     +ooo==+++++~ .... ..::~            |
+|    :oo==oo++:::~  ....                 |
+|    =oo==o=++::++  ......               |
+|    .=ooooo=+:+:=. ... ...              |
+|      .~::+++++++  .... ...             |
+|        ~........ .....  .              |
+|        ........ ......                 |
+|        ...... .  ...  . .              |
+|         ~... .. ..........             |
+|         ~.....  ..........             |
+|         ........  ..... .              |
+|           ..... . .~.....              |
+|            .~...~   .....              |
+|             ~~...    ....              |
+|             ~~~..    .~...             |
+|            .~:~~.    .:..~             |
+|          .~:~~~..    .::~~.            |
+|        .~:::~...     .::~:~.           |
+|       .::~~~..       .::::~~.          |
+|                       ....             |
++----------------------------------------+
+
+Newsies Usage
+
+Usage: newsies [routine]
+
+CLI Commands
+ get-news   download latest news from apnews.com
+ analyze    schedule model training based on story page-ranking
+ train  train model based on story page-ranking
+ cli    initiate interactive agent session using most recently trained model
+ up     tart backend services (ChromaDB, Redis)
+ down   stop backend services
+ chroma-stats   show backend service status
+ chroma-logs    show backend service logs
+--------------
+API Server
+ serve  start the FastAPI server
+ kill   terminate the FastAPI server
+ api    launch FastAPI session (shows interactive API docs)$ ./scripts/newsies 
+
+```

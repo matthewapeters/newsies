@@ -93,9 +93,6 @@ CHROMA_SERVER_AUTHN_CREDENTIALS='${CHROMADB_ENCRYPTED_CREDS}'
         popd &>/dev/null
         ;;
     get-news)
-        python -m newsies.main get-news
-        ;;
-    get-articles)
         python -m newsies.main get-articles
         ;;
     analyze)
@@ -160,19 +157,19 @@ CHROMA_SERVER_AUTHN_CREDENTIALS='${CHROMADB_ENCRYPTED_CREDS}'
         echo "Usage: newsies [routine]"
 	echo
         echo "CLI Commands"
-        echo -e "\tget-news"
-        echo -e "\tget-articles"
-        echo -e "\tanalyze"
-        echo -e "\tcli"
-        echo -e "\tup"
-        echo -e "\tdown"
-        echo -e "\tchroma-stats"
-        echo -e "\tchroma-logs"
+        echo -e "\tget-news\tdownload latest news from apnews.com"
+        echo -e "\tanalyze\tschedule model training based on story page-ranking"
+        echo -e "\ttrain\ttrain model based on story page-ranking"
+        echo -e "\tcli\tinitiate interactive agent session using most recently trained model"
+	echo -e "\tup\tstart backend services (ChromaDB, Redis)"
+        echo -e "\tdown\tstop backend services"
+        echo -e "\tchroma-stats\tshow backend service status"
+        echo -e "\tchroma-logs\tshow backend service logs"
         echo "--------------"
         echo "API Server"
-        echo -e "\tserve"
-        echo -e "\tkill"
-        echo -e "\tapi"
+        echo -e "\tserve\tstart the FastAPI server"
+        echo -e "\tkill\tterminate the FastAPI server"
+	echo -e "\tapi\tlaunch FastAPI session (shows interactive API docs)"
         ;;
 esac
 

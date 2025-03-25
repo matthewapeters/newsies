@@ -1,0 +1,141 @@
+title Newsies Application Flow
+
+actor User
+participant Auth Service
+participant Newsies FastAPI
+participant Newsies App
+participant apnews.com
+participant Model
+participant Storage
+participant ChromaDB
+participant Redis
+
+group login
+User -> Auth Service: login
+Auth Service -> Newsies FastAPI: redirect on auth
+activate Newsies FastAPI
+Newsies FastAPI->Redis: Cache session with TTL
+Newsies FastAPI -> User: session cookie
+deactivate Newsies FastAPI
+end
+
+group API: v1/task-status
+User->Newsies FastAPI: GET v1/task-status/<task-id>
+activate Newsies FastAPI
+Newsies FastAPI->Redis: Validate Session
+Newsies FastAPI -> User: Obj:task status
+deactivate Newsies FastAPI
+end
+
+group API: v1/tasks
+User->Newsies FastAPI: GET v1/tasks
+activate Newsies FastAPI
+Newsies FastAPI->Redis: Validate Session
+Newsies FastAPI -> User: List[Obj:task status]
+
+deactivate Newsies FastAPI
+end
+
+group API: v1/ask
+User -> Newsies FastAPI: POST {Obj:Prompt}
+activate Newsies FastAPI
+Newsies FastAPI->Redis:Validate Session
+Newsies FastAPI->User: HTTP 200 / prompt id
+Newsies FastAPI->Newsies App: run ask_pipeline
+activate Newsies App
+deactivate Newsies FastAPI
+Newsies App->Model: submit prompt
+Model->Newsies App: generate response(s)
+Newsies App->Redis: cache response (key on prompt-id)
+Newsies App->Newsies FastAPI: update task status (based on prompt-id)
+deactivate Newsies App
+end
+
+group API: v1/answer
+User -> Newsies FastAPI: GET v1/answer/<prompt-id>
+activate Newsies FastAPI
+Newsies FastAPI->Redis:Validate Session
+Newsies FastAPI->Newsies App: get_answer
+activate Newsies App
+Newsies App->Redis: get answer by prompt-id
+Newsies App->Newsies FastAPI: return response
+deactivate Newsies App
+Newsies FastAPI->User: HTTP 200 / {Obj: prompt & response}
+deactivate Newsies FastAPI
+end
+
+
+
+group API: v1/run/get-news
+User->Newsies FastAPI: GET v1/run/get-news
+activate Newsies FastAPI
+Newsies FastAPI->Redis: Validate Session
+Newsies FastAPI->Newsies FastAPI: Queue Task
+Newsies FastAPI->User: HTTP 200 / task_id
+
+Newsies FastAPI -> Newsies App: run_get_news_pipeline
+deactivate Newsies FastAPI
+activate Newsies App
+Newsies App -> apnews.com: retrieve stories
+Newsies App --> Newsies FastAPI: update task status
+Newsies App -> Redis: Cache URL to article archive path, using item_id
+Newsies App --> Newsies FastAPI: update task status
+
+Newsies App -> Storage: pickle articles to archive
+Newsies App --> Newsies FastAPI: update task status
+Newsies App -> Storage: detect Named Entities, update article
+Newsies App --> Newsies FastAPI: update task status
+Newsies App -> Storage :generate embeddings for story, NERs, sections, headlines
+Newsies App --> Newsies FastAPI: update task status
+Newsies App -> ChromaDB: Index article by embeddings
+Newsies App --> Newsies FastAPI: update task status to complete
+deactivate Newsies App
+end
+
+group API: v1/run/analyze
+User->Newsies FastAPI: GET v1/run/analyze
+activate Newsies FastAPI
+Newsies FastAPI->Newsies FastAPI: Queue Task
+Newsies FastAPI->User: HTTP 200 / task_id
+
+Newsies FastAPI -> Newsies App: run_analyze_pipeline
+deactivate Newsies FastAPI
+activate Newsies App
+Newsies App -> Storage: load Archive
+Newsies App --> Newsies FastAPI: update task status
+Newsies App -> ChromaDB: build KNN Graph
+Newsies App --> Newsies FastAPI: update task status
+
+Newsies App -> Storage: pickle KNN Graph
+Newsies App --> Newsies FastAPI: update task status
+Newsies App -> Storage : Training Data: generate n questions about each story in each cluster
+Newsies App -> Storage : Training Data: generate n questions about each NER in each story in cluster
+
+Newsies App --> Newsies FastAPI: update task status
+Newsies App -> Newsies App: Schedule LoRA Adapter training based on significant story clusters
+Newsies App --> Newsies FastAPI: update task status to complete
+deactivate Newsies App
+end
+
+
+group API: v1/run/train-model
+User->Newsies FastAPI: GET v1/run/train-model
+activate Newsies FastAPI
+Newsies FastAPI->Newsies FastAPI: Queue Task
+Newsies FastAPI->User: HTTP 200 / task_id
+
+Newsies FastAPI -> Newsies App: run_train_model_pipeline
+deactivate Newsies FastAPI
+activate Newsies App
+Newsies App -> Storage: retrieve training schedule
+Newsies App --> Newsies FastAPI: update task status
+Newsies App -> Storage: retrieve training/testing data questions
+Newsies App --> Newsies FastAPI: update task status
+
+Newsies App -> Model: train Mistral AI PEFT LoRA Adapter
+Newsies App --> Newsies FastAPI: update task status
+Newsies App -> Model : Validate Model againt test data 
+Newsies App -> Storage : Update Latest LoRA Adapter
+Newsies App --> Newsies FastAPI: update task status to complete
+deactivate Newsies App
+end
