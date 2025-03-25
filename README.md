@@ -100,3 +100,4 @@ API Server
 ![Redis](./docs/redis-Logotype.svg) Redis  
 ![beautifulsoup logo](./docs/tap-beautifulsoup.png) Beautifulsoup4  
 ![huggingface logo](./docs/huggingface_logo-noborder.svg) HuggingFace  
+![ChromaDB](./docs/chromadb-227103090-6624bf7d-9524-4e05-9d2c-c28d5d451481.png) ChromaDB  
