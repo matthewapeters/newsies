@@ -13,6 +13,7 @@ from nltk.util import ngrams
 from nltk.corpus import stopwords
 
 import spacy
+from spacy.language import Language
 from spacy.tokens import Doc
 
 from sentence_transformers import SentenceTransformer
@@ -28,16 +29,24 @@ from newsies.collections import TAGS
 
 # from newsies import targets
 
-# pylint: disable=broad-exception-caught
+# pylint: disable=broad-exception-caught, global-statement
 
 DEVICE_STR = "cuda" if torch.cuda.is_available() else "cpu"
-embedding_model = SentenceTransformer(
-    "all-MiniLM-L6-v2", device=DEVICE_STR
-)  # Fast and good quality
+
+embedding_model: SentenceTransformer = None
+nlp: Language = None
 
 
-# Load spaCy model for English
-nlp = spacy.load("en_core_web_sm")
+def _init_():
+    """_init_"""
+    global nlp, embedding_model
+    if embedding_model is None:
+        embedding_model = SentenceTransformer(
+            "all-MiniLM-L6-v2", device=DEVICE_STR
+        )  # Fast and good quality
+    if nlp is None:
+        # Load spaCy model for English
+        nlp = spacy.load("en_core_web_sm")
 
 
 news_sections = {s for s in SECTIONS if s != ""}
@@ -167,6 +176,7 @@ def store_keywords_in_chromadb(
 
     # Process each story
     for text, text_sections in zip(stories, sections):
+        _init_()
         doc = nlp(text)
 
         named_ents = detect_named_entities(doc)
@@ -191,6 +201,7 @@ def assemble_batch_metadata(
     """
     assemble_batch_metadata
     """
+    _init_()
     # Store n-grams with section frequencies
     for ngram, count in n_grams.items():
         ngram_id = f"ngram_{ngram}"
@@ -367,6 +378,7 @@ def generate_named_entity_embeddings_for_stories(archive: str, target: str):
     """
     generate_named_entity_embeddings_for_stories
     """
+    _init_()
     client = ChromaDBClient()
     client.collection_name = archive
     story_ids = client.collection.get(include=[], where={"target": {"$eq": target}})[

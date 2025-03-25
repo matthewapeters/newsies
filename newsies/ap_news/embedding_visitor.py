@@ -5,10 +5,12 @@ newsies.ap_news.embedding_visitor
 from datetime import datetime
 import json
 import math
-from typing import Dict, List
+from typing import Any, Dict, List, Union
 
 import torch
+from torch import Tensor
 from sentence_transformers import SentenceTransformer
+import numpy as np
 
 from newsies.ap_news.article import Article
 from newsies.collections import TAGS
@@ -16,14 +18,20 @@ from newsies.chromadb_client import ChromaDBClient
 
 from .sections import SECTIONS
 
-# pylint: disable=broad-exception-caught
+# pylint: disable=broad-exception-caught, global-statement
 
-DEVICE_STR = "cuda" if torch.cuda.is_available() else "cpu"
-embedding_model = SentenceTransformer(
-    "all-MiniLM-L6-v2", device=DEVICE_STR
-)  # Fast and good quality
+embedding_model: SentenceTransformer = None
 
 news_sections = {s for s in SECTIONS if s != ""}
+
+
+def _init_():
+    global embedding_model
+    device_str = "cuda" if torch.cuda.is_available() else "cpu"
+    if embedding_model is None:
+        embedding_model = SentenceTransformer(
+            "all-MiniLM-L6-v2", device=device_str
+        )  # Fast and good quality
 
 
 class EmbeddingVisitor:
@@ -31,7 +39,7 @@ class EmbeddingVisitor:
     EmbeddingVisitor
     """
 
-    def visit(self, node: any):
+    def visit(self, node: Union[Article, Any]):
         """
         visit
         """
@@ -41,16 +49,27 @@ class EmbeddingVisitor:
         """
         visit_article
         """
+        _init_()
         if __name__ in article.pipelines:
             return
-        to_embed = list(article.section_headlines.values())
-        to_embed.append(article.story)
-        to_embed.append(article.summary)
+        to_embed = [article.story]
+        to_embed.extend([f"{k}: {v}" for k, v in article.section_headlines.items()])
         to_embed.extend(article.named_entities)
-        embeddings: List[float] = []
-        for te in to_embed:
-            embeddings.append(embedding_model.encode(te))
-        article.embeddings = embeddings
+        doc = " ".join(to_embed)
+        tensor_embedding = embedding_model.encode(doc)
+        match tensor_embedding:
+            case Tensor():
+                if tensor_embedding.dim() == 2 and tensor_embedding.shape[0] == 1:
+                    tensor_embedding = tensor_embedding.squeeze(
+                        0
+                    )  # remove batch dimension
+                tensor_embedding = tensor_embedding.detach().cpu().tolist()
+            case np.ndarray():
+                if tensor_embedding.shape[0] == 1:
+                    tensor_embedding = tensor_embedding.squeeze(0)
+                tensor_embedding = tensor_embedding.tolist()
+
+        article.embeddings = tensor_embedding
         article.pipelines[__name__] = datetime.now().isoformat()
 
     def compute_tfidf(self):

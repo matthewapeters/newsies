@@ -4,7 +4,7 @@ newsies.classify
 
 from typing import Dict, List
 import torch
-from transformers import pipeline
+from transformers import pipeline, Pipeline
 from newsies.chromadb_client import find_ordinal
 from newsies.classify.classification_heuristics import (
     ACTION_HEURISTICS,
@@ -14,16 +14,27 @@ from newsies.classify.classification_heuristics import (
     QUERY_OR_REFERENCE_HEURISTICS,
 )
 
+# pylint: disable=global-statement
 
-DEVICE_STR = (
-    # f"cuda:{torch.cuda.get_device_name(0)}" if torch.cuda.is_available() else "cpu"
-    "cuda"
-    if torch.cuda.is_available()
-    else "cpu"
-)
-categorizer = pipeline(
-    "zero-shot-classification", model="facebook/bart-large-mnli", device=DEVICE_STR
-)
+categorizer: Pipeline = None
+
+
+def _init_():
+    global categorizer
+
+    device_str = (
+        # f"cuda:{torch.cuda.get_device_name(0)}" if torch.cuda.is_available() else "cpu"
+        "cuda"
+        if torch.cuda.is_available()
+        else "cpu"
+    )
+
+    if categorizer is None:
+        categorizer = pipeline(
+            "zero-shot-classification",
+            model="facebook/bart-large-mnli",
+            device=device_str,
+        )
 
 
 def categorize_text(text, label_sets: List[str]) -> Dict[str, float]:
@@ -31,6 +42,7 @@ def categorize_text(text, label_sets: List[str]) -> Dict[str, float]:
     categorize_text:
         Classifies a single text against multiple label sets in one call.
     """
+    _init_()
     results = categorizer(text, sum(label_sets, []), multi_label=False)
 
     # Group results back into original categories

@@ -22,6 +22,7 @@ class Headline:
         self.section = kwargs["section"]
 
     def dump(self) -> dict:
+        """dump"""
         return {
             "url": self.url,
             "headline": self.headline,

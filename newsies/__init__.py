@@ -1,7 +1,11 @@
-major = 0
-minor = 1
-patch = 0
+"""
+newsies
+"""
 
-VERSION = f"{major}.{minor}.{patch}"
+MAJOR = 0
+MINOR = 2
+PATCH = 0
+
+VERSION = f"{MAJOR}.{MINOR}.{PATCH}"
 
 __version__ = VERSION

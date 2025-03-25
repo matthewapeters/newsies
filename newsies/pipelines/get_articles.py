@@ -11,6 +11,7 @@ from newsies.ap_news.article_ner import article_ner
 from newsies.ap_news.article_embeddings import article_embeddings
 from newsies.ap_news.article_summary import article_summary
 from newsies.ap_news.article_loader import article_loader
+from newsies.ap_news.article_indexer import article_indexer
 
 from .task_status import TASK_STATUS
 
@@ -42,6 +43,10 @@ def get_articles_pipeline(task_id: str):
         print("\n\t- article embeddings\n")
         TASK_STATUS[task_id] = "running - step: generating embeddings"
         article_embeddings(task_state=TASK_STATUS, task_id=task_id)
+
+        print("\n\t- article indexing\n")
+        TASK_STATUS[task_id] = "running - step: indexing articles"
+        article_indexer(task_state=TASK_STATUS, task_id=task_id)
 
         TASK_STATUS[task_id] = "complete"
     except Exception as e:

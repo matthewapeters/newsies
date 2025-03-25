@@ -13,6 +13,7 @@ from .article_loader import article_loader
 from .article_ner import article_ner
 from .article_summary import article_summary
 from .article import Article
+from .article_indexer import article_indexer
 
 from .sections import SECTIONS
 from .delve_section_ngrams import (

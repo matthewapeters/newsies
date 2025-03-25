@@ -110,7 +110,7 @@ class Article:
         if "category" in pdl and "headline" in pdl:
             section = pdl["category"].lower()
             if section not in self.section_headlines:
-                self.section_headlines[section] = [pdl["headline"]]
+                self.section_headlines[section] = pdl["headline"]
             else:
                 self.section_headlines[section].append(pdl["headline"])
         return pdl
