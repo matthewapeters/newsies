@@ -71,9 +71,10 @@ def get_nearest_neighbors(collection, article_id, k=5) -> List[Tuple[str, float]
     """
     article_data = collection.get(ids=[article_id], include=["embeddings"])
 
-    if not article_data["embeddings"]:
+    if article_data.get("embeddings") is None:
         return []
 
+    # TODO this requires debugging
     embedding = article_data["embeddings"][0]  # Extract stored embedding
     results = collection.query(
         query_embeddings=[embedding], n_results=k + 1

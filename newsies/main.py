@@ -106,7 +106,14 @@ if __name__ == "__main__":
 
             case "analyze":
                 from .pipelines import analyze_pipeline
+                from newsies.pipelines.task_status import TASK_STATUS
 
+                TASK_STATUS[TASK_ID] = {
+                    "session_id": "N/A",
+                    "status": "queued",
+                    "task": "analyze",
+                    "username": USER_ID,
+                }
                 analyze_pipeline(task_id=TASK_ID)
             case "cli":
                 from newsies.cli import cli_read_news
