@@ -34,6 +34,7 @@ for public viewing.  It may become open-source in the future.
 [I use sequencediagram.org to generate UML Sequence Diagrams](<https://sequencediagram.org/>)
 
 NOTE: I am using FastAPI as its APIs are largely self-documenting.
+![FastAPI API Documentation](./docs/FastAPI_docs.png)
 
 ## A Note on Run Tasks
 
