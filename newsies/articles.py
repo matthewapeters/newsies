@@ -8,6 +8,7 @@ import pickle
 from typing import Any, Dict, List, Tuple, Union
 
 import networkx as nx
+import community  # Louvain clustering
 
 from newsies.collections import NEWS
 from newsies.ap_news.article import Article
@@ -63,7 +64,9 @@ class Archive:
         network: List[Dict[str, List[Tuple[str, float]]]] = [
             {k: get_nearest_neighbors(cdb.collection, k, 5)} for k in keys
         ]
+
         graph = build_similarity_graph(network=network)
+
         with open(f"{ARCHIVE}/knn.pkl", "wb") as pkl:
             pickle.dump(graph, pkl)
 
@@ -118,5 +121,11 @@ def build_similarity_graph(
                 similarity >= similarity_threshold
             ):  # Filter edges by similarity threshold
                 grph.add_edge(article_id, neighbor_id, weight=similarity)
+
+    # Assign clusters
+    partition = community.best_partition(grph)  # Returns {node_id: cluster_id}
+    nx.set_node_attributes(
+        grph, partition, "cluster"
+    )  # Add clusters as node attributes
 
     return grph

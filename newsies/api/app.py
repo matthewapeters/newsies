@@ -3,20 +3,15 @@ newsies.api.app
 
 """
 
-from typing import Callable
-import pickle
 import json
 import gc
 import uuid
 from datetime import datetime
-from functools import wraps
 
 from pydantic import BaseModel
-import networkx as nx
-from fastapi.middleware.wsgi import WSGIMiddleware
-from dash import Dash, html
-import dash_cytoscape as cyto
 
+
+from fastapi.middleware.wsgi import WSGIMiddleware
 from fastapi import FastAPI, BackgroundTasks, Request, HTTPException, Path, APIRouter
 from fastapi.responses import RedirectResponse
 from newsies.redis_client import cache_session, get_session
@@ -27,36 +22,24 @@ from newsies.targets import HEADLINE
 from newsies.session import Session
 from newsies.session.init_session import init_session
 
-# from newsies.api.dash_app import server as dash_app_server
+from .session import (
+    SESSION_COOKIE_NAME,
+    USER_COOKIE_NAME,
+    require_session,
+)
+from .dashboard import DASHBOARD_APP, get_knn_graph_data
 
 # pylint: disable=import-outside-toplevel, broad-exception-caught, unused-argument, protected-access
+
+
 app = FastAPI()
-
-
 router_v1 = APIRouter()
+app.mount("/dashboard/", WSGIMiddleware(DASHBOARD_APP.server))
+app.mount(
+    "/_dash-component-suites/", require_session(WSGIMiddleware(DASHBOARD_APP.server))
+)
 
-SESSION_COOKIE_NAME = "sessionid"
-USER_COOKIE_NAME = "usrnm"
-
-
-def get_session_id(request: Request):
-    """Retrieve session ID from cookie or query parameters."""
-    return request.cookies.get(SESSION_COOKIE_NAME)
-
-
-def require_session(endpoint: Callable):
-    """Decorator to enforce session requirement."""
-
-    @wraps(endpoint)
-    async def wrapper(request: Request, *args, **kwargs):
-        sessionid = get_session_id(request)
-        if not sessionid:
-            login_url = f"/login?redirect={request.url}"
-            return RedirectResponse(url=login_url)
-
-        return await endpoint(request, *args, **kwargs)
-
-    return wrapper
+app.include_router(router_v1, prefix="/v1")
 
 
 def run_get_articles(*args, **kwargs):
@@ -295,41 +278,9 @@ async def post_prompt(request: Request, user_prompt: Prompt):
     return response
 
 
+@router_v1.get("/get-knn-graph")
 def get_graph_data():
     """
     Returns graph data in Cytoscape JSON format.
     """
-    try:
-        with open("./daily_news/apnews.com/knn.pkl", "rb") as pkl:
-            grph = pickle.load(pkl)
-        nodes = [{"data": {"id": str(n), "label": f"Article {n}"}} for n in grph.nodes]
-        edges = [{"data": {"source": str(u), "target": str(v)}} for u, v in grph.edges]
-
-        return json.dumps(nodes + edges)
-    except Exception as e:
-        return {}
-
-
-DASH_APP = Dash(__name__)
-
-# Dash Layout
-DASH_APP.layout = html.Div(
-    [
-        html.H1("Article Clustering"),
-        cyto.Cytoscape(
-            id="article-graph",
-            layout={"name": "cose"},
-            style={"width": "100%", "height": "600px"},
-            elements=get_graph_data(),
-            stylesheet=[
-                {"selector": "node", "style": {"label": "data(label)"}},
-                {"selector": "edge", "style": {"width": 2, "line-color": "#888"}},
-            ],
-        ),
-    ]
-)
-
-# Mount Dash App into FastAPI
-app.mount("/dashboard", WSGIMiddleware(DASH_APP.server))
-
-app.include_router(router_v1, prefix="/v1")
+    return json.dumps(get_knn_graph_data())
