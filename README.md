@@ -151,11 +151,41 @@ the `/dashboard/` endpoint shows how the lastest collection of articles cluster 
 
 ### Technologies Used in Newsies
 
-![python logo](./docs/python_logo.png) Python  
-![docker logo](./docs/docker.png) Docker  
-![fastAPI](./docs/fastapi-logo-teal.png) FastAPI  
-![Redis](./docs/redis-Logotype.svg) Redis  
-![beautifulsoup logo](./docs/beautiful-soup.png) Beautifulsoup4  
-![huggingface logo](./docs/huggingface_logo-noborder.svg) HuggingFace  
-![ChromaDB](./docs/chromadb-227103090-6624bf7d-9524-4e05-9d2c-c28d5d451481.png) ChromaDB  
-![Cytoscape](./docs/Cytoscape_Black.png) Cytoscape  
+<table width="100%">
+  <tr>
+    <td>
+      <img src="./docs/chromadb-227103090-6624bf7d-9524-4e05-9d2c-c28d5d451481.png" scale="20%"/>
+    </td>
+    <td>
+      <img src="./docs/Cytoscape_Black.png" scale="33%"/>
+    </td>
+    <td>
+      <img src="./docs/redis-Logotype.svg" scale="300%" />
+    </td>
+  </tr>
+
+  <tr>
+    <td>
+      <img src="./docs/plotly_dash.png" scale="25%" />
+    </td>
+    <td>
+      <img src="./docs/docker.png" scale="200%" />
+    </td>
+    <td>
+      <img src="./docs/python_logo.png" scale="100%" />
+    </td>
+  </tr>
+
+  <tr>
+    <td>
+      <img src="./docs/beautiful-soup.png" scale="99%" />
+    </td>
+    <td>
+      <img src="./docs/fastapi-logo-teal.png" scale="100%" />
+    </td>
+    <td>
+      <img src="./docs/huggingface_logo-noborder.svg" scale="200%" />
+    </td>
+  </tr>
+
+</table>
