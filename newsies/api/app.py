@@ -39,8 +39,6 @@ app.mount(
     "/_dash-component-suites/", require_session(WSGIMiddleware(DASHBOARD_APP.server))
 )
 
-app.include_router(router_v1, prefix="/v1")
-
 
 def run_get_articles(*args, **kwargs):
     """
@@ -284,3 +282,6 @@ def get_graph_data():
     Returns graph data in Cytoscape JSON format.
     """
     return json.dumps(get_knn_graph_data())
+
+
+app.include_router(router_v1, prefix="/v1")
