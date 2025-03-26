@@ -39,6 +39,8 @@ NOTE: I am using FastAPI as its APIs are largely self-documenting.
 
 Newsies uses a semaphore to ensure that only one task pipeline can run at a time.  Requesting multiple tasks while another task is running effectively queues the tasks.  While this solution is not fault-tolerant, the goal is to make it so - in the event of a cash, tasks should be resumable on service restart.  I am looking at using either Redis or a pickled state object towards this end.
 
+![screenshot of queued and running tasks](./docs/tasks_api.png)
+
 ## Command-Line
 
 Services can be started and stopped from the command line, and pipelines can be initiated from the CLI as well.
