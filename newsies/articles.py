@@ -32,6 +32,9 @@ class Archive:
         """
         for filename in os.listdir(ARCHIVE):
             item_id = filename[:-4]
+            # remove non-article files from the collection
+            if item_id in ["knn", "latest_news"]:
+                continue
             if item_id not in self.collection:
                 self.collection[item_id] = ""
 
@@ -71,10 +74,15 @@ def get_nearest_neighbors(collection, article_id, k=5) -> List[Tuple[str, float]
     """
     article_data = collection.get(ids=[article_id], include=["embeddings"])
 
-    if article_data.get("embeddings") is None:
+    # Ensure embeddings exist and are not empty
+    if (
+        not article_data
+        or "embeddings" not in article_data
+        or not article_data["embeddings"].any()
+    ):
+        print(f"Warning: No embedding found for article_id {article_id}")
         return []
 
-    # TODO this requires debugging
     embedding = article_data["embeddings"][0]  # Extract stored embedding
     results = collection.query(
         query_embeddings=[embedding], n_results=k + 1
@@ -98,7 +106,9 @@ def build_similarity_graph(
     """
     grph = nx.Graph()
 
-    for article_id, neighbors in network.items():
+    for node in network:
+        article_id = list(node.keys())[0]
+        neighbors = node[article_id]
         grph.add_node(article_id)  # Add article as a node
 
         # Retrieve nearest neighbors

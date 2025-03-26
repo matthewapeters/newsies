@@ -10,3 +10,4 @@ def test__articles():
     archive = Archive()
     archive.refresh()
     assert len(archive.collection) > 0
+    archive.build_knn()
