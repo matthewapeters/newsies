@@ -8,6 +8,19 @@ This application provides a framework for conversational interaction with an AI-
 
 It is anticipated that this will provide an API service for projects like Jarvus (<https://www.github.com/matthewapeters/gpt4all_agent>) which provides speech-to-text and text-to-speech services locally.
 
+- [Newsies](#newsies)
+  - [Research Project](#research-project)
+  - [Application Flow](#application-flow)
+  - [A Note on Run Tasks](#a-note-on-run-tasks)
+  - [Command-Line](#command-line)
+  - [Application Goals and Strategies](#application-goals-and-strategies)
+    - [Goal](#goal)
+    - [Strategies](#strategies)
+      - [RAG](#rag)
+      - [PEFT LoRA Adapter Model Fine Tuning](#peft-lora-adapter-model-fine-tuning)
+  - [Article Clustering](#article-clustering)
+    - [Technologies Used in Newsies](#technologies-used-in-newsies)
+
 ## Research Project
 
 This is a personal research project using open-source and freely-available technologies.  It has been made available
@@ -125,6 +138,14 @@ This is the current approach.  With this approach, there is little to no prompt 
   - Employ a KNN clustering strategy to identify clusters of data.  Clusters shold not just be based on today's data, although the training data will.
   - Use the clusters to identify which stories' training data to use.  Schedule a training session for each cluster.  Training sessions are asynchronous.
 - The application, at run-time, will use the most recently fine-tuned LoRA Adapter with the model, even if training is ongoing.  The bet is that most questions will be related to central stories.  Over time, less central stories will make it intod the model from the corpus.
+
+## Article Clustering
+
+![articles clusterd by KNN](./docs/article-cluster.png)
+
+`One day's worth of articles clustered by KNN`
+
+the `/dashboard/` endpoint shows how the lastest collection of articles cluster when KNN is applied across all of the articles collected to-date.  The goal is to break the heavy-lift of fine-tuning across clustered batches.
 
 ### Technologies Used in Newsies
 

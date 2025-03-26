@@ -109,7 +109,7 @@ DASHBOARD_APP.layout = html.Div(
                     tooltip={"placement": "bottom", "always_visible": True},
                 ),
             ],
-            style={"padding": "5px"},
+            style={"padding": "2px"},
         ),
         html.Div(
             [
@@ -124,7 +124,7 @@ DASHBOARD_APP.layout = html.Div(
                     tooltip={"placement": "bottom", "always_visible": True},
                 ),
             ],
-            style={"padding": "5px"},
+            style={"padding": "2px"},
         ),
         html.Div(
             [
@@ -139,7 +139,7 @@ DASHBOARD_APP.layout = html.Div(
                     tooltip={"placement": "bottom", "always_visible": True},
                 ),
             ],
-            style={"padding": "5px"},
+            style={"padding": "2px"},
         ),
         html.Div(
             [
@@ -154,7 +154,22 @@ DASHBOARD_APP.layout = html.Div(
                     tooltip={"placement": "bottom", "always_visible": True},
                 ),
             ],
-            style={"padding": "5px"},
+            style={"padding": "2px"},
+        ),
+        html.Div(
+            [
+                html.Label("Edge Elasticity"),
+                dcc.Slider(
+                    id="edge-elasticity-slider",
+                    min=0,
+                    max=1,
+                    step=0.1,
+                    value=0.5,
+                    marks={i / 10: str(i / 10) for i in range(0, 10, 2)},
+                    tooltip={"placement": "bottom", "always_visible": True},
+                ),
+            ],
+            style={"padding": "2px"},
         ),
     ]
 )
@@ -162,21 +177,25 @@ DASHBOARD_APP.layout = html.Div(
 
 # Update Cytoscape layout when slider values change
 @DASHBOARD_APP.callback(
-    Output("graph", "layout"),
+    Output("article-graph", "layout"),
     [
         Input("node-separation-slider", "value"),
         Input("component-spacing-slider", "value"),
         Input("gravity-slider", "value"),
         Input("edge-length-slider", "value"),
+        Input("edge-elasticity-slider", "value"),
     ],
 )
-def update_layout(node_separation, component_spacing, gravity, ideal_edge_length):
+def update_layout(
+    node_separation, component_spacing, gravity, ideal_edge_length, edge_elasticity
+):
     """update_layout"""
 
     print(f"Node Separation: {node_separation}")
     print(f"Component Spacing: {component_spacing}")
     print(f"Gravity: {gravity}")
     print(f"Ideal Edge Length: {ideal_edge_length}")
+    print(f"Edge Elasticity Length: {edge_elasticity}")
 
     return {
         "name": "fcose",
@@ -184,7 +203,7 @@ def update_layout(node_separation, component_spacing, gravity, ideal_edge_length
         "componentSpacing": component_spacing,
         "gravity": gravity,
         "idealEdgeLength": ideal_edge_length,
-        "edgeElasticity": 0.5,
+        "edgeElasticity": edge_elasticity,
         "damping": 0.5,
         "randomize": True,
         "packing": True,
