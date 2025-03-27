@@ -3,7 +3,7 @@ dist/
 docker/chroma_data/chroma.sqlite3
 docker/chroma_data/*-*-*-*-*
 newsies.egg-info
-daily_news/2025*/*
+daily_news/*
 junit/*
 .vscode
 __pycache__/

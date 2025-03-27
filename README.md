@@ -19,6 +19,7 @@ It is anticipated that this will provide an API service for projects like Jarvus
       - [RAG](#rag)
       - [PEFT LoRA Adapter Model Fine Tuning](#peft-lora-adapter-model-fine-tuning)
   - [Article Clustering](#article-clustering)
+  - [Pydep Graph of Newsies Modules](#pydep-graph-of-newsies-modules)
     - [Technologies Used in Newsies](#technologies-used-in-newsies)
 
 ## Research Project
@@ -149,6 +150,10 @@ This is the current approach.  With this approach, there is little to no prompt 
 `One day's worth of articles clustered by KNN`
 
 the `/dashboard/` endpoint shows how the lastest collection of articles cluster when KNN is applied across all of the articles collected to-date.  The goal is to break the heavy-lift of fine-tuning across clustered batches.
+
+## Pydep Graph of Newsies Modules
+
+![pydep class dependencies graph for newsies](./docs/pydep_newsies_main.png)
 
 ### Technologies Used in Newsies
 
