@@ -62,6 +62,12 @@ def scrub_meta(meta: Any) -> Dict[str, str]:
 class Article:
     """Article"""
 
+    @staticmethod
+    def load(archive: str, item_id: str) -> "Article":
+        """load"""
+        with open(f"{archive}/{item_id}.pkl", "rb") as pkl:
+            return pickle.load(pkl)
+
     type = ARTICLE
 
     def __init__(self, archive: str, url: str, bs: BeautifulSoup = None):

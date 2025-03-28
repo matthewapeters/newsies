@@ -7,8 +7,12 @@ import os
 import pickle
 from typing import Any, Dict, List, Tuple, Union
 
+from collections import Counter
+
 import networkx as nx
 import community  # Louvain clustering
+from chromadb import Collection
+import pandas as pd
 
 from newsies.collections import NEWS
 from newsies.ap_news.article import Article
@@ -25,13 +29,18 @@ class Archive:
 
     def __init__(self):
         self.collection: Dict[str, Union[Article, Any]] = {}
+        self.graph: nx.Graph = None
+        self.archive_path = ARCHIVE
+        self.cluster_index = {}
+        self.cluster_profile: pd.DataFrame = None
+        self.ner_counts: Counter = Counter()
 
     def refresh(self):
         """
         refresh
             get the latest list of articles in the ARCHIVE
         """
-        for filename in os.listdir(ARCHIVE):
+        for filename in os.listdir(self.archive_path):
             item_id = filename[:-4]
             # remove non-article files from the collection
             if item_id in ["knn", "latest_news"]:
@@ -50,7 +59,7 @@ class Archive:
             file_name = f"{item_id}.pkl"
 
         if not isinstance(self.collection[item_id], Article):
-            with open(f"{ARCHIVE}/{file_name}", "rb") as pikl:
+            with open(f"{self.archive_path}/{file_name}", "rb") as pikl:
                 self.collection[item_id] = pickle.load(pikl)
         return self.collection[item_id]
 
@@ -65,13 +74,48 @@ class Archive:
             {k: get_nearest_neighbors(cdb.collection, k, 5)} for k in keys
         ]
 
-        graph = build_similarity_graph(network=network)
+        self.graph, partitions = build_similarity_graph(network=network)
+        for node, cluster in partitions.items():
+            if self.cluster_index.get(cluster) is None:
+                self.cluster_index[cluster] = [node]
+            else:
+                self.cluster_index[cluster].append(node)
 
-        with open(f"{ARCHIVE}/knn.pkl", "wb") as pkl:
-            pickle.dump(graph, pkl)
+        with open(f"{self.archive_path}/knn.pkl", "wb") as pkl:
+            pickle.dump(self.graph, pkl)
+
+    def load_graph(self):
+        """load_graph"""
+        with open(f"{self.archive_path}/knn.pkl", "rb") as pkl:
+            self.graph = pickle.load(pkl)
+
+    def load_cluster_profiles(self):
+        """load_metadatas"""
+        client = ChromaDBClient()
+        client.collection_name = NEWS
+        if self.graph is None:
+            self.load_graph()
+        for node in self.graph.nodes():
+            a = Article.load(self.archive_path, node)
+            self.graph.nodes[node]["embeddings"] = a.embeddings
+            self.ner_counts.update(a.named_entities)
+            self.ner_counts.update(a.section_headlines.keys())
+            del a
+
+        data = [
+            {
+                "item_id": node,
+                "cluster": attrs["cluster"],
+                **{f"dim{i:03}": e for i, e in enumerate(attrs["embeddings"])},
+            }
+            for node, attrs in self.graph.nodes(data=True)
+        ]
+        self.cluster_profile = pd.DataFrame(data)
 
 
-def get_nearest_neighbors(collection, article_id, k=5) -> List[Tuple[str, float]]:
+def get_nearest_neighbors(
+    collection: Collection, article_id: str, k: int = 5
+) -> List[Tuple[str, float]]:
     """
     Query ChromaDB to find k nearest articles by embedding similarity.
     """
@@ -102,8 +146,8 @@ def get_nearest_neighbors(collection, article_id, k=5) -> List[Tuple[str, float]
 
 
 def build_similarity_graph(
-    network: List[Dict[str, List[Tuple[str, float]]]], k=5, similarity_threshold=0.8
-):
+    network: List[Dict[str, List[Tuple[str, float]]]], similarity_threshold=0.8
+) -> Tuple[nx.Graph, Dict[str, int]]:
     """
     Constructs a NetworkX graph where articles are nodes and edges are similarity-based connections.
     """
@@ -115,7 +159,6 @@ def build_similarity_graph(
         grph.add_node(article_id)  # Add article as a node
 
         # Retrieve nearest neighbors
-
         for neighbor_id, similarity in neighbors:
             if (
                 similarity >= similarity_threshold
@@ -128,4 +171,4 @@ def build_similarity_graph(
         grph, partition, "cluster"
     )  # Add clusters as node attributes
 
-    return grph
+    return grph, partition

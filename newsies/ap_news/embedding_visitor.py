@@ -27,11 +27,12 @@ news_sections = {s for s in SECTIONS if s != ""}
 
 def _init_():
     global embedding_model
+    models = ["all-mpnet-base-v2", "all-MiniLM-L6-v2"]
     device_str = "cuda" if torch.cuda.is_available() else "cpu"
     if embedding_model is None:
         embedding_model = SentenceTransformer(
-            "all-MiniLM-L6-v2", device=device_str
-        )  # Fast and good quality
+            models[0], device=device_str
+        )  # Fast and good quality - reverse embedding look up?
 
 
 class EmbeddingVisitor:
