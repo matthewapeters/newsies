@@ -13,6 +13,8 @@ import networkx as nx
 import community  # Louvain clustering
 from chromadb import Collection
 import pandas as pd
+from sklearn.decomposition import PCA
+import numpy as np
 
 from newsies.collections import NEWS
 from newsies.ap_news.article import Article
@@ -63,24 +65,47 @@ class Archive:
                 self.collection[item_id] = pickle.load(pikl)
         return self.collection[item_id]
 
+    # def build_knn(self):
+    #     """
+    #     build_knn
+    #     """
+    #     cdb = ChromaDBClient()
+    #     cdb.collection_name = NEWS
+    #     keys = self.collection.keys()
+    #     network: List[Dict[str, List[Tuple[str, float]]]] = [
+    #         {k: get_nearest_neighbors(cdb.collection, k, 5)} for k in keys
+    #     ]
+
+    #     self.graph, partitions = build_similarity_graph(network=network)
+    #     for node, cluster in partitions.items():
+    #         if self.cluster_index.get(cluster) is None:
+    #             self.cluster_index[cluster] = [node]
+    #         else:
+    #             self.cluster_index[cluster].append(node)
+
+    #     with open(f"{self.archive_path}/knn.pkl", "wb") as pkl:
+    #         pickle.dump(self.graph, pkl)
+
     def build_knn(self):
-        """
-        build_knn
-        """
+        """build_knn"""
         cdb = ChromaDBClient()
         cdb.collection_name = NEWS
         keys = self.collection.keys()
-        network: List[Dict[str, List[Tuple[str, float]]]] = [
-            {k: get_nearest_neighbors(cdb.collection, k, 5)} for k in keys
-        ]
+        network = [{k: get_nearest_neighbors(cdb.collection, k, 5)} for k in keys]
 
         self.graph, partitions = build_similarity_graph(network=network)
-        for node, cluster in partitions.items():
-            if self.cluster_index.get(cluster) is None:
-                self.cluster_index[cluster] = [node]
-            else:
-                self.cluster_index[cluster].append(node)
 
+        # Assign clusters
+        for node, cluster in partitions.items():
+            self.graph.nodes[node]["cluster"] = cluster
+
+        # Assign initial positions
+        self.graph = initialize_positions(self.graph)
+
+        # Apply repulsive forces
+        self.graph = repulse_clusters(self.graph, repulsion_factor=2.0, iterations=15)
+
+        # Save graph with positions
         with open(f"{self.archive_path}/knn.pkl", "wb") as pkl:
             pickle.dump(self.graph, pkl)
 
@@ -145,6 +170,35 @@ def get_nearest_neighbors(
     return neighbors  # List of (neighbor_id, similarity_score)
 
 
+# def build_similarity_graph(
+#     network: List[Dict[str, List[Tuple[str, float]]]], similarity_threshold=0.8
+# ) -> Tuple[nx.Graph, Dict[str, int]]:
+#     """
+#     Constructs a NetworkX graph where articles are nodes and edges are similarity-based connections.
+#     """
+#     grph = nx.Graph()
+#
+#     for node in network:
+#         article_id = list(node.keys())[0]
+#         neighbors = node[article_id]
+#         grph.add_node(article_id)  # Add article as a node
+#
+#         # Retrieve nearest neighbors
+#         for neighbor_id, similarity in neighbors:
+#             if (
+#                 similarity >= similarity_threshold
+#             ):  # Filter edges by similarity threshold
+#                 grph.add_edge(article_id, neighbor_id, weight=similarity)
+#
+#     # Assign clusters
+#     partition = community.best_partition(grph)  # Returns {node_id: cluster_id}
+#     nx.set_node_attributes(
+#         grph, partition, "cluster"
+#     )  # Add clusters as node attributes
+#
+#     return grph, partition
+
+
 def build_similarity_graph(
     network: List[Dict[str, List[Tuple[str, float]]]], similarity_threshold=0.8
 ) -> Tuple[nx.Graph, Dict[str, int]]:
@@ -152,6 +206,8 @@ def build_similarity_graph(
     Constructs a NetworkX graph where articles are nodes and edges are similarity-based connections.
     """
     grph = nx.Graph()
+
+    embeddings = {}  # Store embeddings for repulsion logic
 
     for node in network:
         article_id = list(node.keys())[0]
@@ -166,9 +222,69 @@ def build_similarity_graph(
                 grph.add_edge(article_id, neighbor_id, weight=similarity)
 
     # Assign clusters
-    partition = community.best_partition(grph)  # Returns {node_id: cluster_id}
+    partition = community.best_partition(grph)  # {node_id: cluster_id}
     nx.set_node_attributes(
         grph, partition, "cluster"
     )  # Add clusters as node attributes
 
+    # Assign node embeddings (for positioning)
+    for node in grph.nodes():
+        embeddings[node] = np.random.rand(2)  # Temporary random 2D positions
+
+    # Apply cluster repulsion logic
+    cluster_positions = {}
+    for cluster_id in set(partition.values()):
+        cluster_nodes = [n for n in grph.nodes if partition[n] == cluster_id]
+        center = np.mean([embeddings[n] for n in cluster_nodes], axis=0)
+        cluster_positions[cluster_id] = center * 10  # Spread out clusters
+
+    # Assign final positions
+    for node in grph.nodes():
+        cluster_id = partition[node]
+        base_position = cluster_positions[cluster_id]
+        jitter = np.random.randn(2) * 0.1  # Small random noise
+        grph.nodes[node]["position"] = list(base_position + jitter)
+
     return grph, partition
+
+
+def initialize_positions(graph):
+    """Assigns initial 2D positions to nodes based on PCA projection of embeddings."""
+    embeddings = np.array([graph.nodes[n]["embeddings"] for n in graph.nodes])
+    pca = PCA(n_components=2)
+    positions = pca.fit_transform(embeddings)
+
+    # Assign positions
+    for i, node in enumerate(graph.nodes):
+        graph.nodes[node]["position"] = positions[i]
+
+    return graph
+
+
+def repulse_clusters(graph, repulsion_factor=1.5, iterations=10):
+    """Moves clusters apart based on embedded distance."""
+
+    # Compute cluster centroids
+    cluster_centroids = {}
+    for cluster in set(nx.get_node_attributes(graph, "cluster").values()):
+        cluster_nodes = [n for n in graph.nodes if graph.nodes[n]["cluster"] == cluster]
+        positions = np.array([graph.nodes[n]["position"] for n in cluster_nodes])
+        cluster_centroids[cluster] = np.mean(positions, axis=0)
+
+    # Apply repulsion iteratively
+    for _ in range(iterations):
+        for node in graph.nodes:
+            node_cluster = graph.nodes[node]["cluster"]
+            node_position = np.array(graph.nodes[node]["position"])
+
+            for other_cluster, other_centroid in cluster_centroids.items():
+                if node_cluster != other_cluster:
+                    diff = node_position - other_centroid
+                    distance = np.linalg.norm(diff) + 1e-6  # Avoid division by zero
+
+                    # Push node away if clusters are too close
+                    if distance < repulsion_factor:
+                        offset = (diff / distance) * repulsion_factor
+                        graph.nodes[node]["position"] = node_position + offset
+
+    return graph
