@@ -145,7 +145,7 @@ This is the current approach.  With this approach, there is little to no prompt 
 
 ## Article Clustering
 
-![articles clusterd by KNN](./docs/article-cluster.png)
+![articles clusterd by KNN](./docs/semanitc_clustering.png)
 
 `One day's worth of articles clustered by KNN`
 
