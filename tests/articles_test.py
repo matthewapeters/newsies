@@ -2,7 +2,7 @@
 tests.articles_test
 """
 
-from newsies.archive import Archive
+from newsies.ap_news.archive import Archive
 
 
 def test__articles():

@@ -2,7 +2,7 @@
 newsies.ap_news.knn_analysis
 """
 
-from newsies.archive import Archive
+from newsies.ap_news.archive import Archive
 
 
 def generate_knn_graph():
