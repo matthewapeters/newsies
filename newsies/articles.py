@@ -14,7 +14,6 @@ import networkx as nx
 import community  # Louvain clustering
 from chromadb import Collection
 import pandas as pd
-from sklearn.decomposition import PCA
 import numpy as np
 
 from newsies.collections import NEWS
@@ -121,7 +120,7 @@ def get_nearest_neighbors(
     """
     Query ChromaDB to find k nearest articles by embedding similarity.
     """
-    article_data = collection.get(ids=[article_id], include=["embeddings"])
+    article_data = collection.get(ids=[article_id], include=["embeddings", "metadatas"])
 
     # Ensure embeddings exist and are not empty
     if (
@@ -133,6 +132,7 @@ def get_nearest_neighbors(
         return []
 
     embeddings = article_data["embeddings"][0]  # Extract stored embedding
+    metadatas = article_data["metadatas"][0]
     results = collection.query(
         query_embeddings=[embeddings], n_results=k + 1
     )  # k+1 to exclude self-match
@@ -147,6 +147,7 @@ def get_nearest_neighbors(
     return {
         "neighbors": neighbors,
         "embeddings": embeddings,
+        "metadatas": metadatas,
     }  # Dict neighbors: List(neighbor_id, similarity_score), embeddings: embeddings
 
 
@@ -167,6 +168,8 @@ def build_similarity_graph(
         neighbors = details["neighbors"]
         node_embeddings = details["embeddings"]
         grph.nodes[article_id]["embeddings"] = node_embeddings
+        publish_date = details["metadatas"]["publish_date"]
+        grph.nodes[article_id]["publish_date"] = publish_date
 
         # Retrieve nearest neighbors
         for neighbor_id, similarity in neighbors:
