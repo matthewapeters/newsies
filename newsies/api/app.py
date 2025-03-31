@@ -7,7 +7,7 @@ import json
 import gc
 import uuid
 from datetime import datetime
-
+import threading
 from pydantic import BaseModel
 
 
@@ -15,7 +15,7 @@ from fastapi.middleware.wsgi import WSGIMiddleware
 from fastapi import FastAPI, BackgroundTasks, Request, HTTPException, Path, APIRouter
 from fastapi.responses import RedirectResponse
 from newsies.redis_client import cache_session, get_session
-from newsies.pipelines import TASK_STATUS, LOCK
+from newsies.pipelines import TASK_STATUS
 from newsies.ap_news.sections import SECTIONS
 from newsies.chromadb_client import ChromaDBClient, collections
 from newsies.targets import HEADLINE
@@ -32,6 +32,8 @@ from .dashboard import DASHBOARD_APP, get_knn_graph_data
 # pylint: disable=import-outside-toplevel, broad-exception-caught, unused-argument, protected-access
 
 
+RUN_LOCK = threading.Lock()
+
 app = FastAPI()
 router_v1 = APIRouter()
 app.mount("/dashboard/", WSGIMiddleware(DASHBOARD_APP.server))
@@ -46,12 +48,12 @@ def run_get_articles(*args, **kwargs):
     """
     from newsies.pipelines import get_articles_pipeline
 
-    LOCK.acquire()
+    RUN_LOCK.acquire()
     try:
         get_articles_pipeline(*args, **kwargs)
         gc.collect()
     finally:
-        LOCK.release()
+        RUN_LOCK.release()
 
 
 def run_analyze(task_id: str, archive: str = None):
@@ -60,12 +62,12 @@ def run_analyze(task_id: str, archive: str = None):
     """
     from newsies.pipelines import analyze_pipeline
 
-    LOCK.acquire()
+    RUN_LOCK.acquire()
     try:
         analyze_pipeline(task_id, archive)
         gc.collect()
     finally:
-        LOCK.release()
+        RUN_LOCK.release()
 
 
 @router_v1.get("/run/get-news")

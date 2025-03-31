@@ -7,7 +7,24 @@ from datetime import datetime
 import threading
 from typing import List, Dict, Union
 
-# pylint: disable=fixme
+# pylint: disable=fixme, consider-using-with
+
+LOCK = threading.Lock()
+
+
+def protected(c: callable):
+    """
+    protected
+        wraps function calls with mutex LOCK
+    """
+
+    def protected_callable(*args, **kwargs):
+        """protected"""
+        LOCK.acquire()
+        c(*args, **kwargs)
+        LOCK.release()
+
+    return protected_callable
 
 
 class AppStatus(dict):
@@ -15,6 +32,7 @@ class AppStatus(dict):
     AppStatus
     """
 
+    @protected
     def __setitem__(self, key: str, value: Union[str, Dict[str, str]]):
         """
         __setitem__
@@ -57,4 +75,3 @@ class AppStatus(dict):
 
 # Dictionary to track task statuses
 TASK_STATUS = AppStatus()
-LOCK = threading.Lock()

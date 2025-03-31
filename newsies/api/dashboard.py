@@ -17,15 +17,28 @@ DASHBOARD_APP = Dash(__name__, requests_pathname_prefix="/dashboard/")
 def get_knn_graph_data() -> List:
     """get_knn_graph_data"""
     cluster_colors = [
-        "red",
+        "aqua",
+        "black",
         "blue",
+        "blueviolet",
+        "cadetblue",
+        "crimson",
+        "darkcyan",
+        "fuchsia",
+        "gold",
+        "goldenrod",
+        "gray",
         "green",
+        "lime",
+        "maroon",
+        "navy",
+        "olive",
         "purple",
-        "orange",
-        "pink",
-        "cyan",
-        "yellow",
+        "red",
+        "silver",
+        "teal",
     ]
+
     elements = []
     edges = []
 
@@ -36,6 +49,7 @@ def get_knn_graph_data() -> List:
         for node in grph.nodes():
             cluster_id = grph.nodes[node].get("cluster", 0)
             color = cluster_colors[cluster_id % len(cluster_colors)]
+            # print(f"giving cluster {cluster_id} color {color}")
 
             pos = grph.nodes[node].get("position", [0, 0])  # Get assigned position
 

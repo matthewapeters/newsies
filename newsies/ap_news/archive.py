@@ -3,10 +3,13 @@ newsies.articles
     tools for accessing and working with the cached articles
 """
 
+from datetime import datetime
+from functools import wraps
+from typing import Any, Callable, Dict, List, Tuple, Union
+import math
 import os
 import pickle
-from typing import Any, Dict, List, Tuple, Union
-import math
+import threading
 
 from collections import Counter
 
@@ -20,7 +23,50 @@ from newsies.collections import NEWS
 from newsies.ap_news.article import Article
 from newsies.chroma_client import ChromaDBClient
 
-ARCHIVE = f"./daily_news/{NEWS}"
+# pylint: disable=global-statement, too-many-locals, consider-using-with, broad-exception-caught
+
+ARCHIVE_PATH = f"./daily_news/{NEWS}"
+ARCHIVE: "Archive" = None
+_MTX: threading.Lock = threading.Lock()
+_GET_LOCK: threading.Lock = threading.Lock()
+
+
+def protected(mtx: threading.Lock = _MTX) -> Callable:
+    """
+    protected wrapper
+        Wraps functions with MTX lock
+        param: mtx: Lock -- which mutex to use.  Defaults to _MTX
+    """
+
+    def wrapper_factory(c: Callable):
+        """wrapper_factory"""
+
+        @wraps(c)
+        def protected_callable(*args, **kwargs):
+            """protected_callable"""
+            with mtx:
+                return c(*args, **kwargs)
+
+        return protected_callable
+
+    return wrapper_factory
+
+
+@protected(_GET_LOCK)
+def get_archive() -> "Archive":
+    """
+    get_archive
+        returns the Archive singleton
+    """
+    global ARCHIVE
+    if ARCHIVE is None:
+        try:
+            ARCHIVE = Archive.load()
+        except Exception as e:
+            print(f"cannot load archive ({e}) -- initiating new archive")
+            ARCHIVE = Archive()
+            ARCHIVE.dump()
+    return ARCHIVE
 
 
 class Archive:
@@ -32,11 +78,23 @@ class Archive:
     def __init__(self):
         self.collection: Dict[str, Union[Article, Any]] = {}
         self.graph: nx.Graph = None
-        self.archive_path = ARCHIVE
+        self.archive_path = ARCHIVE_PATH
         self.cluster_index = {}
         self.cluster_profile: pd.DataFrame = None
         self.ner_counts: Counter = Counter()
+        # Louvaine clusters
+        self.clusters: Dict[int, List[str]]
+        # clusters ordered for training
+        self.batches: List[Dict[int, List[str]]] = []
 
+        # dict dates UTC in which articles were published in prior 24 hours,
+        # and articles published in that window
+        self.by_publish_dates: Dict[datetime, List[str]] = {}
+
+        # dicts of model train times and path to LoRA adapter
+        self.model_train_dates: Dict[datetime, str] = {}
+
+    @protected
     def refresh(self):
         """
         refresh
@@ -65,6 +123,39 @@ class Archive:
                 self.collection[item_id] = pickle.load(pikl)
         return self.collection[item_id]
 
+    @protected
+    def register_by_publish_date(self, article: Article):
+        """
+        register_by_publish_date
+            maintain an index of articles by publish date YYYYMMDD
+        """
+        pub_date = article.publish_date.strftime(r"%Y%m%d")
+        if pub_date not in self.by_publish_dates:
+            self.by_publish_dates[pub_date] = [article.item_id]
+        else:
+            self.by_publish_dates[pub_date].append(article.item_id)
+
+    @protected
+    def dump(self):
+        """
+        dump
+            backs up the archive as a pickled object
+        """
+        with open(f"{self.archive_path}/archive.pkl", "wb") as pkl:
+            pickle.dump(self, pkl)
+
+    @staticmethod
+    def load() -> "Archive":
+        """
+        load
+            loads the last pickled backup of the archive
+            will throw a FileNotFound if the archive.pkl
+            is not present
+        """
+        with open(f"{ARCHIVE_PATH}/archive.pkl", "rb") as pkl:
+            return pickle.load(pkl)
+
+    @protected
     def build_knn(self):
         """build_knn"""
         cdb = ChromaDBClient()
@@ -79,17 +170,19 @@ class Archive:
             self.graph.nodes[node]["cluster"] = cluster
 
         # Assign initial positions
-        self.graph = initialize_positions(self.graph, partitions)
+        self._initialize_positions(partitions)
 
         # Save graph with positions
         with open(f"{self.archive_path}/knn.pkl", "wb") as pkl:
             pickle.dump(self.graph, pkl)
 
+    @protected
     def load_graph(self):
         """load_graph"""
         with open(f"{self.archive_path}/knn.pkl", "rb") as pkl:
             self.graph = pickle.load(pkl)
 
+    @protected
     def load_cluster_profiles(self):
         """load_metadatas"""
         client = ChromaDBClient()
@@ -112,6 +205,87 @@ class Archive:
             for node, attrs in self.graph.nodes(data=True)
         ]
         self.cluster_profile = pd.DataFrame(data)
+
+    def _initialize_positions(self, partition: Dict[str, int]):
+        """
+        position cluster centers around center,
+        and position nodes around cluster centers
+        similar to CiSE
+        """
+        clusters = {
+            p: [nn for nn, pp in partition.items() if pp == p]
+            for p in set(partition.values())
+        }
+
+        # re-order clusters by size
+        cluster_order = list(clusters.keys())
+        cluster_order.sort(key=lambda x: (len(clusters[x]) * 10000) + x)
+        for n in self.graph.nodes:
+            c = self.graph.nodes[n]["cluster"]
+            c_new = cluster_order.index(c)
+            self.graph.nodes[n]["cluster"] = c_new
+
+        print("cluster_order: ", [f"{x}: {len(clusters[x])}" for x in cluster_order])
+        max_cluster_size = len(clusters[cluster_order[-1]])
+
+        # rebuild clusters, indexed on size
+        new_clusters = {i: clusters[c] for i, c in enumerate(cluster_order)}
+        self.clusters = new_clusters
+
+        # Add clusters as node attributes
+        nx.set_node_attributes(
+            self.graph, {n: k for k, v in self.clusters.items() for n in v}, "cluster"
+        )
+
+        # create groups (based on clusters where members 2 or more)
+        groups: List[List[str]] = [v for v in self.clusters.values() if len(v) > 1]
+        # create a group (singles) of clusters with only one member
+        singles = [
+            single_node
+            for indy_group in self.clusters.values()
+            if len(indy_group) == 1
+            for single_node in indy_group
+        ]
+        # add the singles group to groups
+        groups.append(singles)
+
+        # sort groups by members
+        # pylint: disable=unnecessary-lambda
+        groups.sort(key=lambda x: len(x), reverse=False)
+
+        # the groups will be used for incremental model training batches
+        self.batches = groups
+
+        # compute positions based on radial group centroids
+        group_angle = math.sqrt(len(groups)) * math.pi / len(groups)
+
+        for group_id, nodes in enumerate(groups):
+            group_size = len(nodes)
+            node_angle = 2 * math.pi / group_size
+            cluster_center = (
+                math.cos(group_angle * group_id)
+                * (max_cluster_size * max(group_id, math.sqrt(len(nodes)))),  # x
+                math.sin(group_angle * group_id)
+                * (max_cluster_size * max(group_id, math.sqrt(len(nodes)))),  # y
+            )
+            for i, node in enumerate(nodes):
+                node_x = cluster_center[0] + (
+                    math.cos(node_angle * i) * (group_size * max_cluster_size / 16)
+                )
+                node_y = cluster_center[1] + (
+                    math.sin(node_angle * i) * (group_size * max_cluster_size / 16)
+                )
+                self.graph.nodes[node]["position"] = (node_x, node_y)
+                # only keep edges between cluster-mates
+                # edges_to_prune = []
+                # for e in grph.edges(node):
+                #     if e[0] == node:
+                #         if e[1] not in clusters[cluster_id]:
+                #             edges_to_prune.append(e)
+                #     else:
+                #         if e[0] not in clusters[cluster_id]:
+                #             edges_to_prune.append(e)
+                # grph.remove_edges_from(edges_to_prune)
 
 
 def get_nearest_neighbors(
@@ -186,64 +360,3 @@ def build_similarity_graph(
         embeddings[node] = np.random.rand(2)  # Temporary random 2D positions
 
     return grph, partition
-
-
-def initialize_positions(grph: nx.Graph, partition: Dict[str, int]):
-    """
-    position cluster centers around center,
-    and position nodes around cluster centers
-      similar to CiSE
-    """
-    clusters = {
-        p: [nn for nn, pp in partition.items() if pp == p]
-        for p in set(partition.values())
-    }
-
-    # re-order clusters by size
-    cluster_order = list(clusters.keys())
-    cluster_order.sort(key=lambda x: len(clusters[x]))
-    for n in grph.nodes:
-        c = grph.nodes[n]["cluster"]
-        c_new = cluster_order.index(c)
-        grph.nodes[n]["cluster"] = c_new
-
-    print("cluster_order: ", [f"{x}: {len(clusters[x])}" for x in cluster_order])
-    max_cluster_size = len(clusters[cluster_order[-1]])
-    # rebuild clusters, indexed on size
-    new_clusters = {i: clusters[c] for i, c in enumerate(cluster_order)}
-    clusters = new_clusters
-
-    # compute positions based on radial cluster centroids
-    cluster_angle = math.sqrt(len(clusters)) * math.pi / len(clusters)
-
-    nx.set_node_attributes(
-        grph, partition, "cluster"
-    )  # Add clusters as node attributes
-
-    for cluster_id, nodes in clusters.items():
-        cluster_size = len(nodes)
-        node_angle = 2 * math.pi / cluster_size
-        cluster_center = (
-            math.cos(cluster_angle * cluster_id) * (max_cluster_size * cluster_id),  # x
-            math.sin(cluster_angle * cluster_id) * (max_cluster_size * cluster_id),  # y
-        )
-        for i, node in enumerate(nodes):
-            node_x = cluster_center[0] + (
-                math.cos(node_angle * i) * (cluster_size * max_cluster_size / 16)
-            )
-            node_y = cluster_center[1] + (
-                math.sin(node_angle * i) * (cluster_size * max_cluster_size / 16)
-            )
-            grph.nodes[node]["position"] = (node_x, node_y)
-            # only keep edges between cluster-mates
-            # edges_to_prune = []
-            # for e in grph.edges(node):
-            #     if e[0] == node:
-            #         if e[1] not in clusters[cluster_id]:
-            #             edges_to_prune.append(e)
-            #     else:
-            #         if e[0] not in clusters[cluster_id]:
-            #             edges_to_prune.append(e)
-            # grph.remove_edges_from(edges_to_prune)
-
-    return grph
