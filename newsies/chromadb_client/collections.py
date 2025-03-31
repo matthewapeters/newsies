@@ -2,22 +2,14 @@
 newsies.chromadb_client.collections
 """
 
-from .main import ChromaDBClient
+import json
+
+from newsies.ap_news.archive import get_archive
 
 
-def collections(
-    chromadb_client: ChromaDBClient,
-    archive_date: str = None,
-):
+def collections():
     """
     collections
     """
-    _collections = [archive_date]
-    if archive_date is None:
-        _collections = [
-            c.replace("ap_news_", "")
-            for c in chromadb_client.client.list_collections()
-            if c.startswith("ap_news_")
-        ]
-        _collections.sort()
-    return _collections
+    archive = get_archive()
+    return json.dumps(archive)

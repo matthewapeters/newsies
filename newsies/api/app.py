@@ -231,7 +231,7 @@ async def list_collections(request: Request):
     list_collections
         lists the archived collections in the system
     """
-    return {"collections": collections(ChromaDBClient())}
+    return {"collections": collections()}
 
 
 @router_v1.get("/collection/{collection}")

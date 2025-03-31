@@ -4,7 +4,7 @@ tests.archives_test
 
 from threading import Lock
 
-from newsies.ap_news.archive import Archive, protected
+from newsies.ap_news.archive import Archive, protected_factory
 
 
 def test__articles():
@@ -15,14 +15,17 @@ def test__articles():
     archive.build_knn()
 
 
-def test__protected():
+def test__protected_factory():
     """test__protected"""
     my_mtx = Lock()
 
-    @protected(my_mtx)
+    p = protected_factory(my_mtx)
+
+    @p
     def test(*args, **kwargs):
-        return len(args, len(kwargs))
+        assert my_mtx.locked(), "expected my_mtx to be locked"
+        return len(args), len(kwargs)
 
     t = test(1, **{"p1": "this", "p2": "that"})
     assert t[0] == 1
-    assert t[1] == 1
+    assert t[1] == 2

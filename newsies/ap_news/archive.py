@@ -31,7 +31,7 @@ _MTX: threading.Lock = threading.Lock()
 _GET_LOCK: threading.Lock = threading.Lock()
 
 
-def protected(mtx: threading.Lock = _MTX) -> Callable:
+def protected_factory(mtx: threading.Lock = _MTX) -> Callable:
     """
     protected wrapper
         Wraps functions with MTX lock
@@ -52,7 +52,11 @@ def protected(mtx: threading.Lock = _MTX) -> Callable:
     return wrapper_factory
 
 
-@protected(_GET_LOCK)
+protected = protected_factory()
+get_protected = protected_factory(_GET_LOCK)
+
+
+@get_protected
 def get_archive() -> "Archive":
     """
     get_archive
