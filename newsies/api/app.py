@@ -14,13 +14,12 @@ from pydantic import BaseModel
 from fastapi.middleware.wsgi import WSGIMiddleware
 from fastapi import FastAPI, BackgroundTasks, Request, HTTPException, Path, APIRouter
 from fastapi.responses import RedirectResponse
-from newsies.redis_client import cache_session, get_session
+from newsies.session import Session, get_session_params
+from newsies.session.init_session import init_session
 from newsies.pipelines import TASK_STATUS
 from newsies.ap_news.sections import SECTIONS
-from newsies.chromadb_client import ChromaDBClient, collections
-from newsies.targets import HEADLINE
-from newsies.session import Session
-from newsies.session.init_session import init_session
+from newsies.ap_news.archive import get_archive, Archive
+
 
 from .session import (
     SESSION_COOKIE_NAME,
@@ -172,27 +171,27 @@ async def list_sections(request: Request):
     return {"news_sections": SECTIONS}
 
 
-@router_v1.get("/headlines/{section}")
-@require_session
-async def list_headlines(
-    request: Request,
-    section: str,
-):
-    """
-    list_headlines
-    returns headlines from the requested section
-    """
-    sessid = request.cookies[SESSION_COOKIE_NAME]
-    session: Session = get_session(sessid)
-    qa = {
-        "context": "NEW",
-        "target": HEADLINE,
-        "section": section,
-        "quantity": "ALL",
-    }
-    output = session.query(query_analysis=qa)
-    cache_session(session)
-    return output
+# @router_v1.get("/headlines/{section}")
+# @require_session
+# async def list_headlines(
+#     request: Request,
+#     section: str,
+# ):
+#     """
+#     list_headlines
+#     returns headlines from the requested section
+#     """
+#     sessid = request.cookies[SESSION_COOKIE_NAME]
+#     session: Session = Session(**get_session_params(sessid))
+#     qa = {
+#         "context": "NEW",
+#         "target": HEADLINE,
+#         "section": section,
+#         "quantity": "ALL",
+#     }
+#     output = session.query(query_analysis=qa)
+#     cache_session(session)
+#     return output
 
 
 @app.get("/")
@@ -217,7 +216,7 @@ async def login(username: str = "", redirect: str = "/"):
         )
 
     session, _ = init_session(username=username)
-    cache_session(session)
+    session.cache_session()
     response = RedirectResponse(url=redirect)
     response.set_cookie(key=SESSION_COOKIE_NAME, value=session.id, httponly=True)
     response.set_cookie(key=USER_COOKIE_NAME, value=username, httponly=True)
@@ -231,7 +230,8 @@ async def list_collections(request: Request):
     list_collections
         lists the archived collections in the system
     """
-    return {"collections": collections()}
+    arch: Archive = get_archive()
+    return {"collections": json.dumps(arch)}
 
 
 @router_v1.get("/collection/{collection}")
@@ -243,9 +243,9 @@ async def enable_collection(request: Request, collection: str):
     """
     try:
         sessid = request.cookies[SESSION_COOKIE_NAME]
-        sess = get_session(sessid)
+        sess = Session(**get_session_params(sessid))
         sess.collection = f"ap_news_{collection}"
-        cache_session(sess)
+        sess.cache_session()
         return {"status": "ok", "message": f"using collection {sess.collection}"}
     except Exception as e:
         return HTTPException(status_code=500, detail=f"ERROR: {e}")
@@ -256,7 +256,7 @@ async def enable_collection(request: Request, collection: str):
 async def dump_session(request: Request):
     """dump_session"""
     session_id = request.cookies[SESSION_COOKIE_NAME]
-    s = get_session(session_id)
+    s = Session(**get_session_params(session_id))
     return s.dump()
 
 
@@ -272,10 +272,10 @@ class Prompt(BaseModel):
 async def post_prompt(request: Request, user_prompt: Prompt):
     """post_prompt"""
     session_id = request.cookies[SESSION_COOKIE_NAME]
-    session = get_session(session_id)
-    response = session.query(user_prompt.prompt)
-    cache_session(session)
-    return response
+    session = Session(**get_session_params(session_id))
+    # response = session.query(user_prompt.prompt)
+    session.cache_session()
+    return {"ERR": "Not Implemented Yet"}
 
 
 @router_v1.get("/get-knn-graph")

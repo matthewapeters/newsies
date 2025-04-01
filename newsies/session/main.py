@@ -6,13 +6,19 @@ import json
 from typing import Dict, List, Union
 import uuid
 
-from newsies.llm import LLM as llm, init_llm
-from newsies.chromadb_client import ChromaDBClient, get_all_headlines
-from newsies.classify import prompt_analysis
 from newsies.session.turn import Turn
-from newsies import targets
+from newsies.redis_client import REDIS
 
 # pylint: disable=broad-exception-caught, protected-access, unnecessary-lambda, too-many-instance-attributes, invalid-name
+
+
+def get_session_params(session_id: str):
+    """
+    get_session
+    """
+    raw = REDIS.get(session_id)
+    params = json.loads(raw)
+    return params
 
 
 class Session:
@@ -101,88 +107,8 @@ class Session:
         turn.paged_document_map = last_turn.paged_document_map
         turn.target_type = last_turn.target_type
 
-    def query(self, query: str = None, query_analysis: Dict = None) -> str:
-        """query"""
-        prompt = ""
-        if query_analysis is None and query is not None:
-            query_analysis = prompt_analysis(query)
-
-        turn = Turn(query=query, query_analysis=query_analysis)
-        # results = None
-        print(f"\n(newsies thinks you want to know about {query_analysis})\n")
-        _archivedb = ChromaDBClient()
-        _archivedb.collection_name = self._collection
-        match [
-            query_analysis["context"],
-            query_analysis["target"],
-            query_analysis["quantity"],
-        ]:
-            # These scenarios refer to a new query
-            case ["NEW", targets.HEADLINE, "ALL"]:
-                headlines = get_all_headlines(
-                    self.collection, query_analysis["section"]
-                )
-
-                output = {
-                    "section": query_analysis["section"],
-                    "headlines": headlines,
-                }
-                turn.paged_document_map = [{"0": output}]
-                self.add_history(turn)
-                return output
-            case ["NEW", targets.HEADLINE, "MANY"]:
-                # as opposed to all - are these paged or filtered somehow
-                headlines = get_all_headlines(
-                    self.collection, query_analysis["section"]
-                )
-
-                output = {
-                    "section": query_analysis["section"],
-                    "headlines": headlines,
-                }
-                turn.paged_document_map = [{"0": output}]
-                self.add_history(turn)
-                return output
-            case ["NEW", targets.HEADLINE, "ONE"]:
-                # how can we ask a new query about a headline we know nothing about?
-                pass
-            case ["NEW", targets.DOCUMENT, "ALL"]:
-                pass
-            case ["NEW", targets.DOCUMENT, "MANY"]:
-                pass
-            case ["NEW", targets.DOCUMENT, "ONE"]:
-                pass
-            case ["NEW", targets.SUMMARY, "ALL"]:
-                pass
-            case ["NEW", targets.SUMMARY, "MANY"]:
-                pass
-            case ["NEW", targets.SUMMARY, "ONE"]:
-                pass
-
-            # These scenarios refer to a prior query
-            case ["OLD", targets.HEADLINE, "ALL"]:
-                pass
-            case ["OLD", targets.HEADLINE, "MANY"]:
-                pass
-            case ["OLD", targets.HEADLINE, "ONE"]:
-                pass
-            case ["OLD", targets.DOCUMENT, "ALL"]:
-                pass
-            case ["OLD", targets.DOCUMENT, "MANY"]:
-                pass
-            case ["OLD", targets.DOCUMENT, "ONE"]:
-                pass
-            case ["OLD", targets.SUMMARY, "ALL"]:
-                pass
-            case ["OLD", targets.SUMMARY, "MANY"]:
-                pass
-            case ["OLD", targets.SUMMARY, "ONE"]:
-                pass
-            case _:
-                pass
-
-        prompt: str = turn.get_prompt()
-        init_llm()
-        turn.response = llm.generate(prompt)
-        self.add(turn)
-        return turn.response
+    def cache_session(self):
+        """
+        cache_session
+        """
+        REDIS.set(self.id, self.toJson())

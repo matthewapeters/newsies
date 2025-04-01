@@ -65,7 +65,19 @@ def get_knn_graph_data() -> List:
             )
 
         for u, v in grph.edges:
-            edges.append({"data": {"source": str(u), "target": str(v)}})
+            g1 = cluster_colors[grph.nodes[u]["cluster"] % len(cluster_colors)]
+            g2 = cluster_colors[grph.nodes[v]["cluster"] % len(cluster_colors)]
+            edges.append(
+                {
+                    "data": {"source": str(u), "target": str(v)},
+                    "style": {
+                        "line-fill": "linear-gradient",
+                        "line-style": "dotted" if g1 != g2 else "solid",
+                        "width": 3 if g1 == g2 else 2,
+                        "line-gradient-stop-colors": f"{g2} {g1}",
+                    },
+                }
+            )
 
     except Exception:
         pass
@@ -83,7 +95,6 @@ DASHBOARD_APP.layout = html.Div(
             elements=get_knn_graph_data(),
             stylesheet=[
                 {"selector": "node", "style": {"label": ""}},
-                {"selector": "edge", "style": {"width": 1, "line-color": "#888"}},
             ],
             responsive=True,
         ),

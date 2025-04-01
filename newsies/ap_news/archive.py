@@ -5,9 +5,11 @@ newsies.articles
 
 from datetime import datetime
 from functools import wraps
+
 from typing import Any, Callable, Dict, List, Tuple, Union
 import math
 import os
+import json
 import pickle
 import threading
 
@@ -99,6 +101,12 @@ class Archive:
         self.model_train_dates: Dict[datetime, str] = {}
 
     @protected
+    def to_json(self) -> str:
+        """to_json"""
+        struct = {}
+        return json.dumps(struct)
+
+    @protected
     def refresh(self):
         """
         refresh
@@ -107,7 +115,7 @@ class Archive:
         for filename in os.listdir(self.archive_path):
             item_id = filename[:-4]
             # remove non-article files from the collection
-            if item_id in ["knn", "latest_news"]:
+            if item_id in ["knn", "latest_news", "archive"]:
                 continue
             if item_id not in self.collection:
                 self.collection[item_id] = ""
@@ -290,6 +298,12 @@ class Archive:
                 #         if e[0] not in clusters[cluster_id]:
                 #             edges_to_prune.append(e)
                 # grph.remove_edges_from(edges_to_prune)
+        for n1, n2 in self.graph.edges:
+            weight = self.graph.edges[n1, n2]["edge_class"]
+            c1 = self.graph.nodes[n1]["cluster"]
+            c2 = self.graph.nodes[n2]["cluster"]
+            edge_class = {"weight": weight, "clusters": [c1, c2]}
+            self.graph.edges[n1, n2]["edge_class"] = edge_class
 
 
 def get_nearest_neighbors(

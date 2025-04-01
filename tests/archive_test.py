@@ -4,7 +4,9 @@ tests.archives_test
 
 from threading import Lock
 
-from newsies.ap_news.archive import Archive, protected_factory
+from newsies.ap_news.archive import Archive, protected_factory, get_archive
+
+# pylint: disable=broad-exception-caught
 
 
 def test__articles():
@@ -29,3 +31,13 @@ def test__protected_factory():
     t = test(1, **{"p1": "this", "p2": "that"})
     assert t[0] == 1
     assert t[1] == 2
+
+
+def test__archive_json():
+    """test__archive_json"""
+    arch: Archive = get_archive()
+    try:
+        j = arch.to_json()
+        assert j != "{}"
+    except Exception as e:
+        assert False, f"ERROR: {e}"
