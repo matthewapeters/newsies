@@ -154,7 +154,8 @@ class Archive:
         if pub_date not in by_publish_date:
             by_publish_date[pub_date] = [article.item_id]
         else:
-            by_publish_date[pub_date].append(article.item_id)
+            if article.item_id not in by_publish_date[pub_date]:
+                by_publish_date[pub_date].append(article.item_id)
         REDIS.set("by_publish_date", json.dumps(by_publish_date))
 
     @property
@@ -259,7 +260,7 @@ class Archive:
             c_new = cluster_order.index(c)
             self.graph.nodes[n]["cluster"] = c_new
 
-        print("cluster_order: ", [f"{x}: {len(clusters[x])}" for x in cluster_order])
+        # print("cluster_order: ", [f"{x}: {len(clusters[x])}" for x in cluster_order])
         max_cluster_size = len(clusters[cluster_order[-1]])
 
         # rebuild clusters, indexed on size
@@ -320,12 +321,68 @@ class Archive:
                 #         if e[0] not in clusters[cluster_id]:
                 #             edges_to_prune.append(e)
                 # grph.remove_edges_from(edges_to_prune)
+
         for n1, n2 in self.graph.edges:
             weight = self.graph.edges[n1, n2]["weight"]
             c1 = self.graph.nodes[n1]["cluster"]
             c2 = self.graph.nodes[n2]["cluster"]
             edge_class = {"weight": weight, "clusters": [c1, c2]}
             self.graph.edges[n1, n2]["edge_class"] = edge_class
+
+
+def position_clusters(
+    clusters,
+    graph,
+    base_radius=5,
+    expansion_factor=3,
+    angle_increment=np.radians(137.5),
+):
+    """
+    This came from chatGPT - needs to be validated -
+    my solution works better at the moment!
+
+    Positions clusters using a logarithmic spiral and arranges nodes in each cluster
+    in a circle around the centroid.
+
+    Parameters:
+        clusters (List[List[node]]): List of clusters, where each cluster is a list of
+        node identifiers.
+        graph (nx.Graph): A NetworkX graph containing all nodes.
+        base_radius (float): Minimum radial distance for the first cluster.
+        expansion_factor (float): Controls outward spiral growth.
+        angle_increment (float): Base angle increment (default is the golden angle).
+    """
+
+    # Sort clusters by size (smallest first)
+    clusters = sorted(clusters, key=len)
+
+    # Compute cluster radii based on node count
+    cluster_radii = [np.sqrt(len(cluster)) for cluster in clusters]
+
+    # Positioning variables
+    theta = 0
+    node_positions = {}
+
+    for i, cluster in enumerate(clusters):
+        # Compute cluster centroid position using logarithmic spiral
+        R = base_radius + expansion_factor * np.log(1 + i)
+        cx, cy = R * np.cos(theta), R * np.sin(theta)
+
+        # Distribute nodes in a circle around the centroid
+        num_nodes = len(cluster)
+        node_angle_step = 2 * np.pi / num_nodes
+
+        for j, node in enumerate(cluster):
+            angle = j * node_angle_step
+            node_x = cx + cluster_radii[i] * np.cos(angle)
+            node_y = cy + cluster_radii[i] * np.sin(angle)
+            node_positions[node] = (node_x, node_y)
+
+        # Move to the next angle in the spiral
+        theta += angle_increment
+
+    # Set positions in the graph
+    nx.set_node_attributes(graph, node_positions, "pos")
 
 
 def get_nearest_neighbors(
