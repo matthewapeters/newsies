@@ -231,7 +231,7 @@ async def list_collections(request: Request):
         lists the archived collections in the system
     """
     arch: Archive = get_archive()
-    return {"collections": json.dumps(arch)}
+    return {"collection_archive": arch.to_dict()}
 
 
 @router_v1.get("/collection/{collection}")

@@ -95,16 +95,23 @@ class Archive:
 
         # dict dates UTC in which articles were published in prior 24 hours,
         # and articles published in that window
-        self.by_publish_dates: Dict[datetime, List[str]] = {}
+        self.by_publish_dates: Dict[str, List[str]] = {}
 
         # dicts of model train times and path to LoRA adapter
-        self.model_train_dates: Dict[datetime, str] = {}
+        self.model_train_dates: Dict[str, str] = {}
 
     @protected
-    def to_json(self) -> str:
-        """to_json"""
-        struct = {}
-        return json.dumps(struct)
+    def to_dict(self) -> str:
+        """to_dict"""
+        struct = {
+            "archive_path": self.archive_path,
+            "ner_counts": self.ner_counts.most_common(),
+            "by_publish_dates": self.by_publish_dates,
+            "model_train_dates": self.model_train_dates,
+            "batches": self.batches,
+            "clusters": self.clusters,
+        }
+        return struct
 
     @protected
     def refresh(self):

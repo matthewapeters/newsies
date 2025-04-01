@@ -37,7 +37,7 @@ def test__archive_json():
     """test__archive_json"""
     arch: Archive = get_archive()
     try:
-        j = arch.to_json()
+        j = arch.to_dict()
         assert j != "{}"
     except Exception as e:
         assert False, f"ERROR: {e}"
