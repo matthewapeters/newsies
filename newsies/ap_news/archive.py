@@ -3,15 +3,15 @@ newsies.articles
     tools for accessing and working with the cached articles
 """
 
-from datetime import datetime
 from functools import wraps
 
 from typing import Any, Callable, Dict, List, Tuple, Union
 import math
 import os
-import json
 import pickle
 import threading
+import json
+from multiprocessing import Lock as MpLock
 
 from collections import Counter
 
@@ -22,6 +22,7 @@ import pandas as pd
 import numpy as np
 
 from newsies.collections import NEWS
+from newsies.redis_client import REDIS
 from newsies.ap_news.article import Article
 from newsies.chroma_client import ChromaDBClient
 
@@ -31,6 +32,7 @@ ARCHIVE_PATH = f"./daily_news/{NEWS}"
 ARCHIVE: "Archive" = None
 _MTX: threading.Lock = threading.Lock()
 _GET_LOCK: threading.Lock = threading.Lock()
+_MP_LOCK = MpLock()
 
 
 def protected_factory(mtx: threading.Lock = _MTX) -> Callable:
@@ -56,6 +58,7 @@ def protected_factory(mtx: threading.Lock = _MTX) -> Callable:
 
 protected = protected_factory()
 get_protected = protected_factory(_GET_LOCK)
+multi_processing_protected = protected_factory(_MP_LOCK)
 
 
 @get_protected
@@ -93,10 +96,6 @@ class Archive:
         # clusters ordered for training
         self.batches: List[Dict[int, List[str]]] = []
 
-        # dict dates UTC in which articles were published in prior 24 hours,
-        # and articles published in that window
-        self.by_publish_dates: Dict[str, List[str]] = {}
-
         # dicts of model train times and path to LoRA adapter
         self.model_train_dates: Dict[str, str] = {}
 
@@ -106,7 +105,7 @@ class Archive:
         struct = {
             "archive_path": self.archive_path,
             "ner_counts": self.ner_counts.most_common(),
-            "by_publish_dates": self.by_publish_dates,
+            "by_publish_dates": self.by_publish_date,
             "model_train_dates": self.model_train_dates,
             "batches": self.batches,
             "clusters": self.clusters,
@@ -142,17 +141,33 @@ class Archive:
                 self.collection[item_id] = pickle.load(pikl)
         return self.collection[item_id]
 
-    @protected
-    def register_by_publish_date(self, article: Article):
+    @multi_processing_protected
+    @staticmethod
+    def register_by_publish_date(article: Article):
         """
         register_by_publish_date
             maintain an index of articles by publish date YYYYMMDD
         """
+        raw = REDIS.get("by_publish_date") or "{}"
+        by_publish_date: Dict = json.loads(raw)
         pub_date = article.publish_date.strftime(r"%Y%m%d")
-        if pub_date not in self.by_publish_dates:
-            self.by_publish_dates[pub_date] = [article.item_id]
+        if pub_date not in by_publish_date:
+            by_publish_date[pub_date] = [article.item_id]
         else:
-            self.by_publish_dates[pub_date].append(article.item_id)
+            by_publish_date[pub_date].append(article.item_id)
+        REDIS.set("by_publish_date", json.dumps(by_publish_date))
+
+    @property
+    @staticmethod
+    @multi_processing_protected
+    def by_publish_date(_=None):
+        """
+        by_publish_date
+            threadsafe retrieval of articles grouped by
+            publish date (see register_by_publish_date)
+        """
+        raw = REDIS.get("by_publish_date")
+        return json.loads(raw)
 
     @protected
     def dump(self):
@@ -306,7 +321,7 @@ class Archive:
                 #             edges_to_prune.append(e)
                 # grph.remove_edges_from(edges_to_prune)
         for n1, n2 in self.graph.edges:
-            weight = self.graph.edges[n1, n2]["edge_class"]
+            weight = self.graph.edges[n1, n2]["weight"]
             c1 = self.graph.nodes[n1]["cluster"]
             c2 = self.graph.nodes[n2]["cluster"]
             edge_class = {"weight": weight, "clusters": [c1, c2]}

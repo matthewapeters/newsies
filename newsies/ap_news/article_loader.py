@@ -16,14 +16,13 @@ from newsies.redis_client import REDIS
 from newsies.document_structures import Document
 
 from .article import Article
-from .archive import get_archive
+from .archive import Archive
 
-# pylint: disable=unidiomatic-typecheck, broad-exception-caught
+# pylint: disable=unidiomatic-typecheck, broad-exception-caught, too-many-arguments
 
 URL = "https://apnews.com"
 MAX_TRIES = 5
 ARCHIVE = "apnews.com"
-COLLECTION_ARCHIVE = get_archive()
 os.makedirs(f"./daily_news/{ARCHIVE}", exist_ok=True)
 
 
@@ -102,8 +101,8 @@ def download_article(
                     s = sections[i]
                     article.section_headlines[s] = headline
                 article.pickle()
-                COLLECTION_ARCHIVE.register_by_publish_date(article)
                 article.cache()
+                Archive.register_by_publish_date(article)
                 if task_status is not None:
                     task_status[task_id] = (
                         f"running: downloaded {doc_id} of {doc_count}"
@@ -143,5 +142,3 @@ def article_loader(
                 for i, v in enumerate(documents.values())
             ],
         )
-    # back up the collection archive
-    COLLECTION_ARCHIVE.dump()

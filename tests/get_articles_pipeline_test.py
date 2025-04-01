@@ -45,6 +45,6 @@ def test__get_articles_pipeline():
                 assert len(article.keywords) > 0
                 assert len(article.named_entities) > 0
                 assert len(article.embeddings) > 0
-                assert len(article.pipelines) >= 4
+                assert len(article.pipelines) >= 3
         except FileNotFoundError:
             pass

@@ -15,6 +15,7 @@ def test__articles():
     archive.refresh()
     assert len(archive.collection) > 0
     archive.build_knn()
+    # DO NOT DUMP THE ARCHIVE AS PART OF THE TEST!
 
 
 def test__protected_factory():
@@ -33,8 +34,8 @@ def test__protected_factory():
     assert t[1] == 2
 
 
-def test__archive_json():
-    """test__archive_json"""
+def test__archive_to_dict():
+    """test__archive_to_dict"""
     arch: Archive = get_archive()
     try:
         j = arch.to_dict()
