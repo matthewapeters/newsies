@@ -87,12 +87,15 @@ class Archive:
     def __init__(self):
         self.collection: Dict[str, Union[Article, Any]] = {}
         self.graph: nx.Graph = None
+        self.most_recent_graph: nx.Graph = None
         self.archive_path = ARCHIVE_PATH
         self.cluster_index = {}
         self.cluster_profile: pd.DataFrame = None
         self.ner_counts: Counter = Counter()
+
         # Louvaine clusters
         self.clusters: Dict[int, List[str]]
+
         # clusters ordered for training
         self.batches: List[Dict[int, List[str]]] = []
 
@@ -158,10 +161,9 @@ class Archive:
                 by_publish_date[pub_date].append(article.item_id)
         REDIS.set("by_publish_date", json.dumps(by_publish_date))
 
-    @property
     @staticmethod
     @multi_processing_protected
-    def by_publish_date(_=None):
+    def by_publish_date(_=None) -> Dict[str, List[str]]:
         """
         by_publish_date
             threadsafe retrieval of articles grouped by
@@ -169,6 +171,39 @@ class Archive:
         """
         raw = REDIS.get("by_publish_date")
         return json.loads(raw)
+
+    @staticmethod
+    def most_recent_articles(offset: int = 0) -> nx.Graph:
+        """
+        most_recent_articles
+            returns the most recent clusters
+            from the archive
+        """
+        # get by_publish_date
+        articles_by_publish_date: Dict[str, List[str]] = Archive.by_publish_date()
+        dates = list(articles_by_publish_date.keys())
+        # sort the dates
+        dates.sort(reverse=True)
+        # get the most recent date
+        most_recent_date = dates[offset]
+        # get the articles for that date
+        most_recent_articles = articles_by_publish_date.get(most_recent_date, [])
+        # filter clusters by the most recent articles
+        # and return the most recent clusters
+        return most_recent_articles
+
+    @staticmethod
+    def publish_dates() -> List[str]:
+        """
+        publish_dates
+            returns the list of dates in the archive
+        """
+        # get by_publish_date
+        articles_by_publish_date: Dict[str, List[str]] = Archive.by_publish_date()
+        dates = list(articles_by_publish_date.keys())
+        # sort the dates
+        dates.sort(reverse=True)
+        return dates
 
     @protected
     def dump(self):
@@ -365,8 +400,8 @@ def position_clusters(
 
     for i, cluster in enumerate(clusters):
         # Compute cluster centroid position using logarithmic spiral
-        R = base_radius + expansion_factor * np.log(1 + i)
-        cx, cy = R * np.cos(theta), R * np.sin(theta)
+        radius = base_radius + expansion_factor * np.log(1 + i)
+        cx, cy = radius * np.cos(theta), radius * np.sin(theta)
 
         # Distribute nodes in a circle around the centroid
         num_nodes = len(cluster)

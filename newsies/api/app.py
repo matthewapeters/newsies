@@ -14,6 +14,9 @@ from pydantic import BaseModel
 from fastapi.middleware.wsgi import WSGIMiddleware
 from fastapi import FastAPI, BackgroundTasks, Request, HTTPException, Path, APIRouter
 from fastapi.responses import RedirectResponse
+import uvicorn
+
+
 from newsies.session import Session, get_session_params
 from newsies.session.init_session import init_session
 from newsies.pipelines import TASK_STATUS
@@ -21,12 +24,17 @@ from newsies.ap_news.sections import SECTIONS
 from newsies.ap_news.archive import get_archive, Archive
 
 
-from .session import (
+from newsies.api.session import (
     SESSION_COOKIE_NAME,
     USER_COOKIE_NAME,
     require_session,
 )
-from .dashboard import DASHBOARD_APP, get_knn_graph_data
+from newsies.api.dashboard import (
+    DASHBOARD_APP,
+    get_knn_graph_data,
+    get_knn_graph,
+    get_most_recent_graph,
+)
 
 # pylint: disable=import-outside-toplevel, broad-exception-caught, unused-argument, protected-access
 
@@ -283,7 +291,18 @@ def get_graph_data():
     """
     Returns graph data in Cytoscape JSON format.
     """
-    return json.dumps(get_knn_graph_data())
+    return json.dumps(get_knn_graph_data(get_data=get_knn_graph))
+
+
+@router_v1.get("/get-most-recent-knn-graph")
+def get_most_recent_knn_graph():
+    """
+    Returns graph data in Cytoscape JSON format.
+    """
+    return json.dumps(get_knn_graph_data(get_data=get_most_recent_graph))
 
 
 app.include_router(router_v1, prefix="/v1")
+
+if __name__ == "__main__":
+    uvicorn.run(app)
