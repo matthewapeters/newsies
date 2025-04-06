@@ -9,7 +9,7 @@ import pandas as pd
 import datasets
 from datasets import Dataset
 
-from newsies.pipelines.train_model import (
+from newsies.llm.train_model import (
     generate_qa_pairs,
     train_model,
     test_lora,

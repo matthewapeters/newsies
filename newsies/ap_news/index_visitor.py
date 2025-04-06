@@ -111,6 +111,8 @@ class IndexVisitor:
         """visit_article"""
         if __name__ in article.pipelines:
             return
+        if article is None or article.item_id is None or article.item_id == "":
+            return
 
         document_ids = [article.item_id]
         metadatas = {

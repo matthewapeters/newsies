@@ -24,7 +24,11 @@ def index_article(
     index_article
         stores the article in ChromaDB vector space for clustering/searching
     """
+    if story_url is None:
+        return
     uri = REDIS.get(story_url)
+    if uri is None:
+        return
     with open(uri, "rb") as fh:
         article: Article = pickle.load(fh)
 

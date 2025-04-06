@@ -469,6 +469,9 @@ def build_similarity_graph(
 
     for node in network:
         article_id = list(node.keys())[0]
+        # Check if article_id is valid
+        if article_id == "None" or article_id == "":
+            continue
         details = node[article_id]
         grph.add_node(article_id)  # Add article as a node
         neighbors = details["neighbors"]
