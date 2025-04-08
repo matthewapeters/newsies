@@ -6,7 +6,12 @@ import os
 
 from newsies.ap_news.archive import Archive, get_archive
 
+from newsies.llm import BatchSet, BatchRetriever, DataFramer, QuestionGenerator
+
+
 from .task_status import TASK_STATUS
+
+# pylint: disable=broad-exception-caught
 
 
 def train_model_pipeline():
@@ -17,19 +22,29 @@ def train_model_pipeline():
     TASK_STATUS["train_model"] = "started"
     try:
         print("\n\t- training model\n")
-        TASK_STATUS["train_model"] = "running - step: training model"
+        TASK_STATUS["train_model"] = "running - step: building batches"
         archive: Archive = get_archive()
+        batch_set = BatchSet(archive.build_batches())
         # Load the latest training data
-        batch = archive.get_latest_batch()
-        # load_training_data()
-        # Get the latest LoRA adapter
-        # get_latest_lora_adapter()
+        TASK_STATUS["train_model"] = (
+            "running - step: retrieving metadata and embeddings"
+        )
+        v = BatchRetriever()
+        v.visit(batch_set)
+
+        # convert batches to dataframes
+        TASK_STATUS["train_model"] = "running - step: formatting Data Sets"
+        v = DataFramer()
+        v.visit(batch_set)
+
+        # generate training questions
+        TASK_STATUS["train_model"] = "running - step: generating training questions"
+        v = QuestionGenerator()
+        v.visit(batch_set)
+
         # Format the dataset for training
-        # format_dataset()
-        # Get the latest training data
-        # get_latest_training_data()
-        # Generate QA pairs for training
-        # generate_qa_pairs()
+        TASK_STATUS["train_model"] = "running - step: format datasets"
+
         # Train the model
         # test_lora()
         TASK_STATUS["train_model"] = "complete"

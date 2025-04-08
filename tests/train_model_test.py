@@ -9,8 +9,10 @@ import pandas as pd
 import datasets
 from datasets import Dataset
 
+from newsies.ap_news.archive import Archive, get_archive
+
 from newsies.llm.train_model import (
-    generate_qa_pairs,
+    # generate_qa_pairs,
     train_model,
     test_lora,
     get_train_and_test_data,
@@ -21,9 +23,87 @@ from newsies.llm.train_model import (
     TTEST,
     TRAIN_DATA_TYPES,
 )
+from newsies.llm import (
+    BatchSet,
+    BatchRetriever,
+    DataFramer,
+    QuestionGenerator,
+    load_qa_from_parquet,
+)
 from newsies.lora_adapter import get_latest_lora_adapter
 
 # pylint: disable=broad-exception-caught
+
+
+def test__build_batches():
+    """
+    test__build_batches
+    """
+    arch = get_archive()
+    assert isinstance(arch, Archive)
+    batches = arch.build_batches()
+    assert isinstance(batches, list)
+    assert len(batches) > 0, f"expected batches to be larger than 0, got {batches}"
+    assert isinstance(
+        batches[0], set
+    ), f"expected batches[0] to be a set, got {batches[0]}"
+    batch_set = BatchSet(batches)
+    assert isinstance(batch_set, BatchSet)
+    assert len(batch_set) == len(
+        batches
+    ), f"expected {len(batches)}, got {len(batch_set)}"
+    br = BatchRetriever()
+    assert isinstance(br, BatchRetriever)
+    br.visit(batch_set)
+    assert len(batch_set.embeddings) == len(
+        batch_set.batches
+    ), f"expected {len(batch_set.batches)}, got {len(batch_set.embeddings)}"
+    assert len(batch_set.metadatas) == len(
+        batch_set.batches
+    ), f"expected {len(batch_set.batches)}, got {len(batch_set.metadatas)}"
+
+    df = DataFramer()
+    assert isinstance(df, DataFramer)
+    df.visit(batch_set)
+    assert len(batch_set.data_sets) == len(batch_set), (
+        f"expected len(batch_set.data_sets) == {len(batch_set)}, "
+        f"got {len(batch_set)}"
+    )
+    assert isinstance(
+        batch_set.data_sets[0], Dataset
+    ), f"expected batch_set.data_sets[0] to be a Dataset, got {batch_set.data_sets[0]}"
+    assert (
+        len(batch_set.data_sets[0]) > 0
+    ), f"expected batch_set.data_sets[0] to be larger than 0, got {batch_set.data_sets[0]}"
+    assert len(batch_set.data_sets[0].features) > 0, (
+        f"expected batch_set.data_sets[0].features to be larger than 0, "
+        f"got {batch_set.data_sets[0].features}"
+    )
+    assert isinstance(batch_set.data_sets[0].features, datasets.Features), (
+        f"expected batch_set.data_sets[0].features to be a Features, "
+        f"got {batch_set.data_sets[0].features}"
+    )
+    assert isinstance(batch_set.data_sets[0].features["doc"], datasets.Value), (
+        f"expected batch_set.data_sets[0].features['doc'] to be a Value, "
+        f"got {batch_set.data_sets[0].features['doc']}"
+    )
+    v = QuestionGenerator()
+    v.visit(batch_set)
+    sample = load_qa_from_parquet(batchset_index=0)
+
+    assert (
+        batch_set.data_sets[0]["doc"][0] == sample[0]["doc"]
+    ), "expected parquet doc to match dataset"
+
+    assert (
+        len(sample) % v.number_of_questions == 0 and len(sample) > 0
+    ), f"assert, sample should be greater than 0 and multiple of {v.number_of_questions}"
+
+    assert len(
+        [s["question"] for s in sample if s.get("question", "N/A") != "N/A"]
+    ) == len(sample), "assert each entry has a question"
+
+    assert len(sample["question"]) == len(batch_set[0])
 
 
 def test__generate_qa_pairs():
@@ -33,7 +113,7 @@ def test__generate_qa_pairs():
         These questions and the expected answers from the context are used to
         fine-tune the model's LoRA adapter.
     """
-    generate_qa_pairs(batch_size=11, number_of_questions=3)
+    # generate_qa_pairs(batch_size=11, number_of_questions=3)
 
 
 def test__get_train_and_test_data():

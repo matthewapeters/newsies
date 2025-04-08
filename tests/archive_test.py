@@ -42,3 +42,13 @@ def test__archive_to_dict():
         assert j != "{}"
     except Exception as e:
         assert False, f"ERROR: {e}"
+
+
+def test__archive_build_batches():
+    """test__archive_build_batches"""
+    arch: Archive = get_archive()
+    try:
+        batches = arch.build_batches()
+        assert len(batches) > 0
+    except Exception as e:
+        assert False, f"ERROR: {e}"

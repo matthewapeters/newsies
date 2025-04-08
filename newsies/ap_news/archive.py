@@ -5,7 +5,7 @@ newsies.articles
 
 from functools import wraps
 
-from typing import Any, Callable, Dict, List, Tuple, Union
+from typing import Any, Callable, Dict, List, Set, Tuple, Union
 import math
 import os
 import pickle
@@ -97,7 +97,8 @@ class Archive:
         self.clusters: Dict[int, List[str]]
 
         # clusters ordered for training
-        self.batches: List[Dict[int, List[str]]] = []
+        self.batches: List[List[str]] = []
+        self.trained_batches: Set[Tuple[str]] = set()
 
         # dicts of model train times and path to LoRA adapter
         self.model_train_dates: Dict[str, str] = {}
@@ -319,9 +320,8 @@ class Archive:
         # add the singles group to groups
         groups.append(singles)
 
-        # sort groups by members
-        # pylint: disable=unnecessary-lambda
-        groups.sort(key=lambda x: len(x), reverse=False)
+        # sort groups by member count
+        groups.sort(key=len, reverse=False)
 
         # the groups will be used for incremental model training batches
         self.batches = groups
@@ -346,16 +346,6 @@ class Archive:
                     math.sin(node_angle * i) * (group_size * max_cluster_size / 16)
                 )
                 self.graph.nodes[node]["position"] = (node_x, node_y)
-                # only keep edges between cluster-mates
-                # edges_to_prune = []
-                # for e in grph.edges(node):
-                #     if e[0] == node:
-                #         if e[1] not in clusters[cluster_id]:
-                #             edges_to_prune.append(e)
-                #     else:
-                #         if e[0] not in clusters[cluster_id]:
-                #             edges_to_prune.append(e)
-                # grph.remove_edges_from(edges_to_prune)
 
         for n1, n2 in self.graph.edges:
             weight = self.graph.edges[n1, n2]["weight"]
@@ -363,6 +353,51 @@ class Archive:
             c2 = self.graph.nodes[n2]["cluster"]
             edge_class = {"weight": weight, "clusters": [c1, c2]}
             self.graph.edges[n1, n2]["edge_class"] = edge_class
+
+    def build_batches(self) -> List[Set[str]]:
+        """
+        build_batches
+            builds the batches of articles for training
+            based on the clusters and publish dates
+            of the articles in the archive
+        """
+        if self.trained_batches is None:
+            self.trained_batches = set()
+        batches: List[Tuple[str]] = []
+        for offset, _ in enumerate(Archive.publish_dates()):
+            # get the articles for that date
+            most_recent_articles = Archive.most_recent_articles(offset)
+            offset_batches = [
+                set(sorted(n for n in grp if n in most_recent_articles))
+                for grp in self.batches
+            ]
+            offset_batches = [
+                b
+                for b in offset_batches
+                if b not in self.trained_batches and len(b) > 0
+            ]
+            batches.extend(offset_batches)
+        return batches
+
+    def get_articles(self, article_ids: List[str]) -> List[Article]:
+        """
+        get_articles
+            returns the articles for the given article_ids
+        """
+        articles = []
+        for article_id in article_ids:
+            if article_id == "None" or article_id == "":
+                continue
+            if article_id in self.collection and isinstance(
+                self.collection[article_id], Article
+            ):
+                articles.append(self.collection[article_id])
+            else:
+                a = Article.load(self.archive_path, article_id)
+                if a is not None:
+                    articles.append(a)
+                    self.collection[article_id] = a
+        return articles
 
 
 def position_clusters(
