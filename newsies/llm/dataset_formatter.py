@@ -86,6 +86,8 @@ class DatasetFormatter:
 
     def visit_batch_set(self, batch_set: BatchSet):
         """visit_batch_set"""
+        for ds in batch_set.data_sets:
+            print(ds)
 
     def format_dataset(self, qa_dataset: pd.DataFrame):
         """Ensure tokenizer has a padding token and tokenize dataset."""

@@ -9,7 +9,7 @@ from datetime import datetime
 import torch
 from torch.multiprocessing import set_start_method
 
-from huggingface_hub import snapshot_download
+# from huggingface_hub import snapshot_download
 from transformers import (
     AutoTokenizer,
     #    AutoModelForCausalLM,

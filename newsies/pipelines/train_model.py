@@ -6,7 +6,13 @@ import os
 
 from newsies.ap_news.archive import Archive, get_archive
 
-from newsies.llm import BatchSet, BatchRetriever, DataFramer, QuestionGenerator
+from newsies.llm import (
+    BatchSet,
+    BatchRetriever,
+    DataFramer,
+    QuestionGenerator,
+    DatasetFormatter,
+)
 
 
 from .task_status import TASK_STATUS
@@ -44,6 +50,8 @@ def train_model_pipeline():
 
         # Format the dataset for training
         TASK_STATUS["train_model"] = "running - step: format datasets"
+        v = DatasetFormatter()
+        v.visit(batch_set)
 
         # Train the model
         # test_lora()
