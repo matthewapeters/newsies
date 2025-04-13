@@ -42,22 +42,20 @@ def test__build_batches():
     arch = get_archive()
     assert isinstance(arch, Archive)
     batches = arch.build_batches()
-    assert isinstance(batches, list)
+    assert isinstance(batches, Dict)
     assert len(batches) > 0, f"expected batches to be larger than 0, got {batches}"
+    sample = list(batches.values())[0]
     assert isinstance(
-        batches[0], set
-    ), f"expected batches[0] to be a set, got {batches[0]}"
+        sample, list
+    ), f"expected sample batch to be a set, got {type(sample)}"
     batch_set = BatchSet(batches)
     assert isinstance(batch_set, BatchSet)
-    assert len(batch_set) == len(
-        batches
-    ), f"expected {len(batches)}, got {len(batch_set)}"
     br = BatchRetriever()
     assert isinstance(br, BatchRetriever)
     br.visit(batch_set)
-    assert len(batch_set.embeddings) == len(
-        batch_set.batches
-    ), f"expected {len(batch_set.batches)}, got {len(batch_set.embeddings)}"
+    #    assert len(batch_set.embeddings) == len(
+    #        batch_set.batches
+    #    ), f"expected {len(batch_set.batches)}, got {len(batch_set.embeddings)}"
     assert len(batch_set.metadatas) == len(
         batch_set.batches
     ), f"expected {len(batch_set.batches)}, got {len(batch_set.metadatas)}"
@@ -67,7 +65,7 @@ def test__build_batches():
     df.visit(batch_set)
     assert len(batch_set.data_sets) == len(batch_set), (
         f"expected len(batch_set.data_sets) == {len(batch_set)}, "
-        f"got {len(batch_set)}"
+        f"got {len(batch_set.data_sets)}"
     )
     assert isinstance(
         batch_set.data_sets[0], Dataset
@@ -89,7 +87,23 @@ def test__build_batches():
     )
     v = QuestionGenerator()
     v.visit(batch_set)
-    sample = load_qa_from_parquet(batchset_index=0)
+    pub_dates = os.listdir("./training_data/")
+    assert (
+        len(pub_dates) > 0
+    ), "expected at least one publish date folder under ./training_data"
+    pub_dates.sort()
+    most_recent = pub_dates[-1]
+    batches = os.listdir(f"./training_data/{most_recent}/")
+    batches.sort()
+    assert len(batches) > 0, "expected at least one batch"
+
+    sample = load_qa_from_parquet(
+        file_path=f"./training_data/{most_recent}/{batches[-1]}/"
+    )
+
+    assert len(batch_set.batches[most_recent]) == len(
+        batches
+    ), f"expected a folder for each batch for {most_recent}"
 
     assert (
         batch_set.data_sets[0]["doc"][0] == sample[0]["doc"]
@@ -103,7 +117,13 @@ def test__build_batches():
         [s["question"] for s in sample if s.get("question", "N/A") != "N/A"]
     ) == len(sample), "assert each entry has a question"
 
-    assert len(sample["question"]) == len(batch_set[0])
+    # training data should be organized on disk by publish date and then by
+    # batch, allowing training to prioritize most recent and most populated
+    # clusters
+    # It is currently saved under training_data/{batch_id}
+    # change to training_data/{publish_date}/{batch_id}  -- batch_id is ordered by
+    # cluster size in descending order, so largest clusters (over history) get
+    # priority in training
 
 
 def test__generate_qa_pairs():

@@ -22,6 +22,15 @@ CHROMA_PORT = "CHROMADB_PORT"
 CHROMA_CREDS = "CHROMADB_CREDS"
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
+Connection_Creds = {
+    "host": os.getenv(CHROMA_HOST, "localhost"),
+    "port": os.getenv(CHROMA_PORT, "8000"),
+    "settings": Settings(
+        chroma_client_auth_provider="chromadb.auth.basic_authn.BasicAuthClientProvider",
+        chroma_client_auth_credentials=os.getenv(CHROMA_CREDS),
+    ),
+}
+
 
 class ChromaDBClient:
     """
@@ -33,38 +42,12 @@ class ChromaDBClient:
     _embed_model = SentenceTransformer(MODEL_NAME)
 
     def __init__(self, *args, **kwargs):
-        self._client: chromadb.HttpClient = None
         self._collection: chromadb.Collection = None
-        self._host: str = None
-        self._port: int = None
-        self._chroma_creds: str = None
         self._colection_name: str = None
         self._lang: str = None
 
-        if "host" in kwargs:
-            self._host = kwargs["host"]
-        else:
-            self._host = os.getenv(CHROMA_HOST, "localhost")
-        if "port" in kwargs:
-            self._port = kwargs["port"]
-        else:
-            self._port = os.getenv(CHROMA_PORT, "8000")
-        if "chroma_creds" in kwargs:
-            self._chroma_creds = kwargs["chroma_creds"]
-        else:
-            self._chroma_creds = os.getenv(CHROMA_CREDS)
-        if self._chroma_creds == "":
-            raise Exception("CHROMA_CREDS environment variable is not set")
-
         # Connect to ChromaDB
-        self._client: chromadb.HttpClient = chromadb.HttpClient(
-            host=self._host,
-            port=self._port,
-            settings=Settings(
-                chroma_client_auth_provider="chromadb.auth.basic_authn.BasicAuthClientProvider",
-                chroma_client_auth_credentials=self._chroma_creds,
-            ),
-        )
+        self._client: chromadb.HttpClient = chromadb.HttpClient(**Connection_Creds)
 
     @property
     def client(self) -> chromadb.HttpClient:

@@ -6,10 +6,12 @@ a datastructure for storing batches of data, against which several visitors can 
 for the purpose of training and testing machine learning models.
 """
 
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, Iterable, List, Tuple, Union, Set
 import pickle
 
 from datasets import Dataset
+
+from newsies.ap_news.article import Article
 
 
 class BatchSet:
@@ -22,14 +24,15 @@ class BatchSet:
 
     path: str = "./train_test/batch_set.pkl"
 
-    def __init__(self, batches: List[Tuple[str]]):
+    def __init__(self, batches: Dict[str, Tuple[str]]):
         """
         Initialize the BatchSet class.
         """
-        self.batches: List[Tuple[str]] = batches
-        self.embeddings: List[List[float]] = []
+        self.batches: Dict[str, List[Tuple[str]]] = batches
+        # self.embeddings: List[List[float]] = []
         self.metadatas: List[List[Dict[str, Union[str, int, float]]]] = []
         self.data_sets: List[Dataset] = []
+        self.articles: List[Article] = []
 
     def save(self):
         """
@@ -48,9 +51,9 @@ class BatchSet:
 
     def __len__(self):
         """
-        Return the number of batches in the BatchSet.
+        Return the number of datasets in the BatchSet.
         """
-        return len(self.batches)
+        return len(self.data_sets)
 
     def __getitem__(self, index):
         """
@@ -58,11 +61,11 @@ class BatchSet:
         """
         return self.batches[index]
 
-    def __iter__(self):
+    def __iter__(self) -> Iterable[Tuple[Set[str], Dict[str, Any], List[Article]]]:
         """
         Iterate over the batches in the BatchSet.
         """
-        return iter(self.batches)
+        return iter(zip(self.batches.items(), self.metadatas, self.articles))
 
     def accept(self, visitor: Any):
         """

@@ -149,13 +149,14 @@ class QuestionGenerator:
                 batch = pd.DataFrame(dict(batch))
                 batch = batch.explode("train_question").explode("question")
 
-                p = f"./training_data/{batch_set_idx:04d}"
-                os.makedirs(p, exist_ok=True)
+                pub_date = batch["pubdate"].iloc[0]
 
                 # Save Each Batch Immediately to Parquet
                 save_qa_to_parquet(
-                    batch,
-                    file_path=f"{p}/qa_dataset_batch_{batch_id:04d}.parquet",
+                    qa_data=batch,
+                    pub_date=pub_date,
+                    batch_set_idx=batch_set_idx,
+                    batch_id=batch_id,
                 )
 
                 # 🔥 Free GPU memory manually
@@ -184,8 +185,17 @@ class QuestionGenerator:
         print(datetime.now(), "All batches processed")
 
 
-def save_qa_to_parquet(qa_data: pd.DataFrame, file_path: str):
+def save_qa_to_parquet(
+    qa_data: pd.DataFrame, pub_date: str, batch_set_idx: int, batch_id: int
+):
     """save_qa_to_parquet"""
+
+    p = f"./training_data/{pub_date}/{batch_set_idx:04d}"
+    os.makedirs(p, exist_ok=True)
+
+    # Save Each Batch Immediately to Parquet
+    file_path = f"{p}/qa_dataset_batch_{batch_id:04d}.parquet"
+
     try:
         qa_data.to_parquet(file_path, index=False)
     except Exception as e:

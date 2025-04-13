@@ -256,8 +256,6 @@ class Archive:
     @protected
     def load_cluster_profiles(self):
         """load_metadatas"""
-        client = ChromaDBClient()
-        client.collection_name = NEWS
         if self.graph is None:
             self.load_graph()
         for node in self.graph.nodes():
@@ -354,7 +352,7 @@ class Archive:
             edge_class = {"weight": weight, "clusters": [c1, c2]}
             self.graph.edges[n1, n2]["edge_class"] = edge_class
 
-    def build_batches(self) -> List[Set[str]]:
+    def build_batches(self) -> Dict[int, Tuple[str]]:
         """
         build_batches
             builds the batches of articles for training
@@ -363,12 +361,14 @@ class Archive:
         """
         if self.trained_batches is None:
             self.trained_batches = set()
-        batches: List[Tuple[str]] = []
-        for offset, _ in enumerate(Archive.publish_dates()):
+        batches: Dict[int, Tuple[str]] = {}
+        for offset, pub_date in enumerate(Archive.publish_dates()):
             # get the articles for that date
             most_recent_articles = Archive.most_recent_articles(offset)
+            # sort each group alphanumerically so the set will have consistent
+            # comparability.
             offset_batches = [
-                set(sorted(n for n in grp if n in most_recent_articles))
+                tuple(set(sorted(n for n in grp if n in most_recent_articles)))
                 for grp in self.batches
             ]
             offset_batches = [
@@ -376,7 +376,7 @@ class Archive:
                 for b in offset_batches
                 if b not in self.trained_batches and len(b) > 0
             ]
-            batches.extend(offset_batches)
+            batches[pub_date] = offset_batches
         return batches
 
     def get_articles(self, article_ids: List[str]) -> List[Article]:

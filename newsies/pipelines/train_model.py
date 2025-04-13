@@ -3,7 +3,7 @@ newsies.pipelines.train_model
 """
 
 import os
-
+from typing import Dict, Tuple
 from newsies.ap_news.archive import Archive, get_archive
 
 from newsies.llm import (
@@ -28,9 +28,11 @@ def train_model_pipeline():
     TASK_STATUS["train_model"] = "started"
     try:
         print("\n\t- training model\n")
+
         TASK_STATUS["train_model"] = "running - step: building batches"
         archive: Archive = get_archive()
-        batch_set = BatchSet(archive.build_batches())
+        batch_set: Dict[str, Tuple[str]] = BatchSet(archive.build_batches())
+
         # Load the latest training data
         TASK_STATUS["train_model"] = (
             "running - step: retrieving metadata and embeddings"

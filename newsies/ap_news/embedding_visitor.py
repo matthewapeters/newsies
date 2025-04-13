@@ -1,5 +1,8 @@
 """
 newsies.ap_news.embedding_visitor
+
+    Embeds the contents of the article for similarity comparison
+
 """
 
 from datetime import datetime
