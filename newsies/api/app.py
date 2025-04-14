@@ -77,6 +77,20 @@ def run_analyze(task_id: str, archive: str = None):
         RUN_LOCK.release()
 
 
+def run_train_model(task_id):
+    """
+    run_train_model
+    """
+    from newsies.pipelines.train_model import train_model_pipeline
+
+    RUN_LOCK.acquire()
+    try:
+        train_model_pipeline(task_id)
+        gc.collect()
+    finally:
+        RUN_LOCK.release()
+
+
 @router_v1.get("/run/get-news")
 @require_session
 async def run_get_news_pipeline(
@@ -143,6 +157,27 @@ async def run_analyze_pipeline(
         "message": "analyzing latest news from Associated Press",
         "task_id": task_id,
     }
+
+
+@router_v1.get("/run/train-llm")
+@require_session
+async def run_train_llm(request: Request, background_tasks: BackgroundTasks):
+    """
+    run_train_llm
+    Train the model in the background
+    Will work backwards through the training data
+    """
+    task_id = str(uuid.uuid4())
+    username = request.cookies[USER_COOKIE_NAME]
+    sess = request.cookies[SESSION_COOKIE_NAME]
+    TASK_STATUS[task_id] = {
+        "session_id": sess,
+        "status": "queued",
+        "task": "train-llm",
+        "username": username,
+    }
+    background_tasks.add_task(run_train_model, task_id)
+    return {"message": "training the LLM on latest news data", "task_id": task_id}
 
 
 @router_v1.get("/task-status/{task_id}")

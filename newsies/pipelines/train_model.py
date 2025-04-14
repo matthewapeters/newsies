@@ -20,46 +20,45 @@ from .task_status import TASK_STATUS
 # pylint: disable=broad-exception-caught
 
 
-def train_model_pipeline():
+def train_model_pipeline(task_id: str):
     """
     train_model_pipeline
     """
     print("\nTRAIN MODEL\n")
-    TASK_STATUS["train_model"] = "started"
+    TASK_STATUS[task_id] = "started"
     try:
         print("\n\t- training model\n")
 
-        TASK_STATUS["train_model"] = "running - step: building batches"
+        TASK_STATUS[task_id] = "running - step: building batches"
         archive: Archive = get_archive()
         batch_set: Dict[str, Tuple[str]] = BatchSet(archive.build_batches())
 
         # Load the latest training data
-        TASK_STATUS["train_model"] = (
-            "running - step: retrieving metadata and embeddings"
-        )
+        TASK_STATUS[task_id] = "running - step: retrieving metadata and embeddings"
         v = BatchRetriever()
         v.visit(batch_set)
 
         # convert batches to dataframes
-        TASK_STATUS["train_model"] = "running - step: formatting Data Sets"
+        TASK_STATUS[task_id] = "running - step: formatting Data Sets"
         v = DataFramer()
         v.visit(batch_set)
 
         # generate training questions
-        TASK_STATUS["train_model"] = "running - step: generating training questions"
+        TASK_STATUS[task_id] = "running - step: generating training questions"
         v = QuestionGenerator()
         v.visit(batch_set)
 
         # Format the dataset for training
-        TASK_STATUS["train_model"] = "running - step: format datasets"
+        TASK_STATUS[task_id] = "running - step: format datasets"
         v = DatasetFormatter()
         v.visit(batch_set)
 
         # Train the model
+
         # test_lora()
-        TASK_STATUS["train_model"] = "complete"
+        TASK_STATUS[task_id] = "complete"
     except Exception as e:
-        TASK_STATUS["train_model"] = f"error: {e}"
+        TASK_STATUS[task_id] = f"error: {e}"
         print(f"Error: {e}")
     finally:
         # Clean up any temporary files or directories created during the training process

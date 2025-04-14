@@ -86,6 +86,9 @@ class DatasetFormatter:
 
     def visit_batch_set(self, batch_set: BatchSet):
         """visit_batch_set"""
+        # Make sure the modal is downloaded
+        DatasetFormatter.download_mistral()
+
         for ds in batch_set.data_sets:
             print(ds)
 
