@@ -2,6 +2,7 @@
 newsies.pipelines.train_model
 """
 
+from uuid import uuid4
 import os
 from typing import Dict, Tuple
 from newsies.ap_news.archive import Archive, get_archive
@@ -12,6 +13,8 @@ from newsies.llm import (
     DataFramer,
     QuestionGenerator,
     DatasetFormatter,
+    ModelTrainer,
+    download_mistral,
 )
 
 
@@ -31,7 +34,7 @@ def train_model_pipeline(task_id: str):
 
         TASK_STATUS[task_id] = "running - step: building batches"
         archive: Archive = get_archive()
-        batch_set: Dict[str, Tuple[str]] = BatchSet(archive.build_batches())
+        batch_set: BatchSet = BatchSet(archive.build_batches())
 
         # Load the latest training data
         TASK_STATUS[task_id] = "running - step: retrieving metadata and embeddings"
@@ -45,15 +48,25 @@ def train_model_pipeline(task_id: str):
 
         # generate training questions
         TASK_STATUS[task_id] = "running - step: generating training questions"
-        v = QuestionGenerator()
+        v = QuestionGenerator(number_of_questions=5)
         v.visit(batch_set)
 
-        # Format the dataset for training
+        # Split each publish date into train, test, token_train, and token_test
+        # datasets.  These are saved to disk as parquet files.
+        # The files are named with the publish date and the type of dataset.
         TASK_STATUS[task_id] = "running - step: format datasets"
         v = DatasetFormatter()
         v.visit(batch_set)
 
         # Train the model
+        TASK_STATUS[task_id] = "running - step: training model"
+        download_mistral()
+        v = ModelTrainer()
+        # setting these allows status update as we iterate through the batches
+        # if either is not set, the status will not update
+        v.status = TASK_STATUS
+        v.task_id = task_id
+        v.visit(batch_set)
 
         # test_lora()
         TASK_STATUS[task_id] = "complete"
@@ -80,6 +93,12 @@ def train_model_pipeline(task_id: str):
         # This is a placeholder for any additional steps you might want to include
 
 
+def main():
+    """main"""
+    task_id = str(uuid4())
+    train_model_pipeline(task_id=task_id)
+
+
 if __name__ == "__main__":
     # Run the training pipeline
-    train_model_pipeline()
+    main()

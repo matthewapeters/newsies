@@ -184,6 +184,10 @@ class Article:
         """
         pickle
         """
+        # remove old file if it exists
+        if os.path.exists(self.path()):
+            os.remove(self.path())
+
         with open(self.path(), "wb") as fh:
             pickle.dump(self, fh)
 

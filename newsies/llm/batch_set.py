@@ -24,11 +24,11 @@ class BatchSet:
 
     path: str = "./train_test/batch_set.pkl"
 
-    def __init__(self, batches: Dict[str, Tuple[str]]):
+    def __init__(self, batches: Dict[int, Tuple[str]]):
         """
         Initialize the BatchSet class.
         """
-        self.batches: Dict[str, List[Tuple[str]]] = batches
+        self.batches: Dict[int, List[Tuple[str]]] = batches
         # self.embeddings: List[List[float]] = []
         self.metadatas: List[List[Dict[str, Union[str, int, float]]]] = []
         self.data_sets: List[Dataset] = []

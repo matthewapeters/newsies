@@ -358,6 +358,8 @@ class Archive:
             builds the batches of articles for training
             based on the clusters and publish dates
             of the articles in the archive
+
+            returns: Dict[publish_date int, Tuple[article_id str]]
         """
         if self.trained_batches is None:
             self.trained_batches = set()

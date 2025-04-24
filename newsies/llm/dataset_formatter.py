@@ -86,14 +86,23 @@ class DatasetFormatter:
 
     def visit_batch_set(self, batch_set: BatchSet):
         """visit_batch_set"""
-        # Make sure the modal is downloaded
+        # Make sure the model is downloaded
         DatasetFormatter.download_mistral()
+        pub_date: int
 
-        for ds in batch_set.data_sets:
-            print(ds)
+        for pub_date in batch_set.batches.keys():
+            # Split to train and test
+            self.split_train_and_test_data(pub_date)
 
-    def format_dataset(self, qa_dataset: pd.DataFrame):
-        """Ensure tokenizer has a padding token and tokenize dataset."""
+    def format_dataset(self, qa_dataset: pd.DataFrame) -> Dict[str, Dataset]:
+        """
+        Ensure tokenizer has a padding token and tokenize dataset.
+        Args:
+            qa_dataset (pd.DataFrame): DataFrame containing the dataset to be tokenized.
+        Returns:
+            Dict[str, Dataset]: Dictionary containing the 'train', 'test',
+            'tokenized train',  and 'tokenized test' datasets.
+        """
 
         # Ensure the tokenizer has a padding token
         if self.tokenizer.pad_token is None:
@@ -159,21 +168,17 @@ class DatasetFormatter:
 
         return split_dataset
 
-    def get_train_and_test_data(
-        self, batchset_id: int
-    ) -> Dict[str, Dict[str, Dataset]]:
+    def split_train_and_test_data(self, pub_date: int) -> Dict[str, Dict[str, Dataset]]:
         """
         get_train_and_test_data
         """
         # Apply the function
-        train_df = load_training_data(batchset_id)
+        train_df = load_training_data(pub_date)
         split_dataset = self.format_dataset(train_df)
 
         datehourminute = datetime.now().strftime(r"%Y%m%d%H%M")
-        basedir = f"./train_test/{datehourminute}"
+        basedir = f"./train_test/{pub_date}/{datehourminute}"
 
         for d in TRAIN_DATA_TYPES:
             os.makedirs(f"{basedir}/{d}", exist_ok=True)
             split_dataset[d].to_parquet(f"{basedir}/{d}/data.parquet", batch_size=1000)
-
-        return split_dataset
