@@ -3,7 +3,6 @@ newsies.llm.model_trainer
 """
 
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Dict, List, Tuple
 import os
 import pickle
@@ -15,14 +14,9 @@ import torch
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
-    #   AutoModelForSeq2SeqLM,
     TrainingArguments,
     Trainer,
-    #   BatchEncoding,
 )
-
-from huggingface_hub import snapshot_download
-
 
 from newsies.llm.batch_set import BatchSet
 
@@ -36,26 +30,6 @@ TEST = "test"
 TTRAIN = "token_train"
 TTEST = "token_test"
 _TRAIN_DATA_TYPES = [TRAIN, TEST, TTRAIN, TTEST]
-
-
-def download_mistral():
-    """
-    download_mistral
-    this should be used only in installation
-    """
-
-    mistral_models_path = Path.home().joinpath("mistral_models", "7B-v0.3")
-    mistral_models_path.mkdir(parents=True, exist_ok=True)
-    #
-    snapshot_download(
-        repo_id="mistralai/Mistral-7B-v0.3",
-        allow_patterns=[
-            "params.json",
-            "consolidated.safetensors",
-            "tokenizer.model.v3",
-        ],
-        local_dir=mistral_models_path,
-    )
 
 
 def get_latest_training_data(

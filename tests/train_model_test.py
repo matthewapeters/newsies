@@ -30,6 +30,8 @@ from newsies.llm import (
     QuestionGenerator,
     load_qa_from_parquet,
     DatasetFormatter,
+    ModelTrainer,
+    download_mistral,
 )
 from newsies.lora_adapter import get_latest_lora_adapter
 
@@ -128,6 +130,12 @@ def test__build_batches():
 
     v = DatasetFormatter()
     assert isinstance(v, DatasetFormatter)
+    v.visit(batch_set)
+
+    # Train the model
+    v = ModelTrainer()
+    # setting these allows status update as we iterate through the batches
+    # if either is not set, the status will not update
     v.visit(batch_set)
 
 

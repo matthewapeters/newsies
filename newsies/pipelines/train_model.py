@@ -4,7 +4,8 @@ newsies.pipelines.train_model
 
 from uuid import uuid4
 import os
-from typing import Dict, Tuple
+
+# from typing import Dict, Tuple
 from newsies.ap_news.archive import Archive, get_archive
 
 from newsies.llm import (
@@ -85,12 +86,6 @@ def train_model_pipeline(task_id: str):
             os.rmdir(temp_dir)
         print("Temporary files cleaned up.")
         print("Training pipeline completed.")
-        # Add any additional cleanup or finalization steps as needed
-        # For example, you might want to save the trained model or log the results
-        # save_model()
-        # log_results()
-        # print("Model saved and results logged.")
-        # This is a placeholder for any additional steps you might want to include
 
 
 def main():

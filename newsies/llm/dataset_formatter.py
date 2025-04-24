@@ -64,6 +64,9 @@ class DatasetFormatter:
         mistral_models_path = Path.home().joinpath(
             "mistral_models", DatasetFormatter.model_version
         )
+        if mistral_models_path.exists():
+            print(f"mistral models already downloaded to {mistral_models_path}")
+            return
         mistral_models_path.mkdir(parents=True, exist_ok=True)
         #
         snapshot_download(
