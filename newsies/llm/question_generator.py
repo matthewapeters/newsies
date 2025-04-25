@@ -2,7 +2,6 @@
 newsies.llm.question_generator
 """
 
-from typing import Any
 import os
 from datetime import datetime
 
@@ -24,30 +23,22 @@ import pandas as pd
 
 # from newsies.ap_news.archive import get_archive, Archive
 from newsies.llm import BatchSet
+from newsies.visitor import Visitor
 
 # pylint: disable=broad-exception-caught
 
 
-class QuestionGenerator:
+class QuestionGenerator(Visitor):
     """
     QuestionGenerator creates training questions for articles in BatchSets
     """
 
     def __init__(self, number_of_questions: int = 3, batch_size: int = 8):
+        super().__init__(
+            BatchSet, "training_data/question_dates.pkl", "generate questions"
+        )
         self.number_of_questions = number_of_questions
         self.batch_size = batch_size
-
-    def visit(self, o: Any):
-        """
-        visit
-        """
-        match o:
-            case BatchSet():
-                o.accept(self)
-            case _:
-                raise TypeError(
-                    f"QuestionGenerator only accepts BatchSet, got {type(o)}"
-                )
 
     def visit_batch_set(self, batch_set: BatchSet):
         """

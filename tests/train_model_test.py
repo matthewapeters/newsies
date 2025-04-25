@@ -31,7 +31,6 @@ from newsies.llm import (
     load_qa_from_parquet,
     DatasetFormatter,
     ModelTrainer,
-    download_mistral,
 )
 from newsies.lora_adapter import get_latest_lora_adapter
 
@@ -90,7 +89,8 @@ def test__build_batches():
     )
     v = QuestionGenerator()
     v.visit(batch_set)
-    pub_dates = os.listdir("./training_data/")
+    base_dir = "./training_data"
+    pub_dates = [d for d in os.listdir(base_dir) if os.path.isdir(f"{base_dir}/{d}")]
     assert (
         len(pub_dates) > 0
     ), "expected at least one publish date folder under ./training_data"

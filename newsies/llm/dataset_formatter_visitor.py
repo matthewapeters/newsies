@@ -18,6 +18,7 @@ import pandas as pd
 
 
 from newsies.llm import BatchSet
+from newsies.visitor import Visitor
 
 # pylint: disable=broad-exception-raised, broad-exception-caught
 
@@ -45,7 +46,7 @@ def load_training_data(batchset_index: int) -> pd.DataFrame:
     return df
 
 
-class DatasetFormatter:
+class DatasetFormatter(Visitor):
     """
     DatasetFormatter
     """
@@ -53,6 +54,12 @@ class DatasetFormatter:
     model_version = "7B-v0.3"
     base_model_name = f"mistralai/Mistral-{model_version}"
     tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+
+    def __init__(self):
+        super().__init__(
+            BatchSet, "./training_data/formatted_dates.pkl", "split train-/test-data"
+        )
+        self.tokenizer = AutoTokenizer.from_pretrained(self.base_model_name)
 
     @staticmethod
     def download_mistral():
@@ -79,14 +86,6 @@ class DatasetFormatter:
             local_dir=mistral_models_path,
         )
 
-    def visit(self, o: Any):
-        """visit"""
-        match o:
-            case BatchSet():
-                o.accept(self)
-            case _:
-                raise TypeError(f"BatchRetriever only accepts BatchSet, got {type(o)}")
-
     def visit_batch_set(self, batch_set: BatchSet):
         """visit_batch_set"""
         # Make sure the model is downloaded
@@ -95,7 +94,23 @@ class DatasetFormatter:
 
         for pub_date in batch_set.batches.keys():
             # Split to train and test
-            self.split_train_and_test_data(pub_date)
+            if pub_date in self.history:
+                self.update_status(f"Already split {pub_date}")
+                continue
+            self.update_status(f"Splitting {pub_date}")
+            start = datetime.now()
+            try:
+                self.history[pub_date] = batch_set[pub_date]
+                self.split_train_and_test_data(pub_date)
+                end = datetime.now()
+                elapsed = end - start
+                self.update_status(f"{pub_date} took {elapsed}")
+            except Exception as e:
+                end = datetime.now()
+                elapsed = end - start
+                self.update_status(f"{pub_date} failed after {elapsed}: {e}")
+
+            self.dump_history()
 
     def format_dataset(self, qa_dataset: pd.DataFrame) -> Dict[str, Dataset]:
         """
@@ -176,7 +191,7 @@ class DatasetFormatter:
         get_train_and_test_data
         """
         # Apply the function
-        train_df = load_training_data(pub_date)
+        train_df = load_training_data(batchset_index=pub_date)
         split_dataset = self.format_dataset(train_df)
 
         datehourminute = datetime.now().strftime(r"%Y%m%d%H%M")

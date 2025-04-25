@@ -3,9 +3,8 @@ newsies.llm.model_trainer
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Tuple
+from typing import Dict, List
 import os
-import pickle
 
 from datasets import Dataset
 import pandas as pd
@@ -19,10 +18,11 @@ from transformers import (
 )
 
 from newsies.llm.batch_set import BatchSet
+from newsies.visitor import Visitor
 
 # pylint: disable=dangerous-default-value, broad-exception-caught
 
-TRAINED_DATES_PATH = "./train_test/trained_dates.pkl"
+_TRAINED_DATES_PATH = "./training_data/trained_dates.pkl"
 _BASE_MODEL_NAME = "mistralai/Mistral-7B-v0.3"
 
 TRAIN = "train"
@@ -61,7 +61,7 @@ def get_latest_training_data(
     return train_dict
 
 
-class ModelTrainer:
+class ModelTrainer(Visitor):
     """
     ModelTrainer class is used to train a machine learning model.
     This is a Visitor class targeting the BatchSet class.
@@ -70,73 +70,11 @@ class ModelTrainer:
     def __init__(self):
         # key is publish date, value is a list of batches
         # that have been trained
-        self.trained_dates: Dict[int, Tuple[str]]
-
-        if os.path.exists(TRAINED_DATES_PATH):
-            with open(TRAINED_DATES_PATH, "rb") as f:
-                self.trained_dates = pickle.load(f)
-        else:
-            self.trained_dates = {}
-            self.dump_trained_dates()
-
-        self._status: Dict = None
-        self._task_id: str = None
-
-    @property
-    def status(self) -> Dict:
-        """
-        status property
-        """
-        return self._status
-
-    @status.setter
-    def status(self, status: Dict):
-        """
-        status property
-        """
-        self._status = status
-
-    @property
-    def task_id(self) -> str:
-        """
-        task_id property
-        """
-        return self._task_id
-
-    @task_id.setter
-    def task_id(self, task_id: str):
-        """
-        task_id property
-        """
-        self._task_id = task_id
-
-    def update_status(
-        self,
-        status: str = "",
-    ):
-        """
-        Update the status of the task.
-        """
-        if self._status is not None and self._task_id is not None:
-            self._status[self._task_id] = f"running - step: training model: {status}"
-
-    def dump_trained_dates(self):
-        """
-        Dump the trained dates to a file."""
-        with open(TRAINED_DATES_PATH, "wb") as f:
-            pickle.dump(self.trained_dates, f)
-
-    def visit(self, batch_set: Any):
-        """
-        Visit the BatchSet class and train a machine learning model.
-        """
-        match batch_set:
-            case BatchSet():
-                self.visit_batch_set(batch_set)
-            case _:
-                raise TypeError(
-                    f"ModelTrainer only accepts BatchSet, got {type(batch_set)}"
-                )
+        super().__init__(
+            BatchSet,
+            _TRAINED_DATES_PATH,
+            "ModelTrainer",
+        )
 
     def visit_batch_set(self, batch_set: BatchSet):
         """
@@ -144,25 +82,25 @@ class ModelTrainer:
         """
         # iterate over each publish date from oldest to newest
         # and train the model on the publish date batch
-        pub_dates = batch_set.batches.keys()
+        pub_dates = list(batch_set.batches.keys())
         pub_dates.sort()
         for pub_date in pub_dates:
             batch = batch_set.batches[pub_date]
             # skip any publish date that has already been trained
             # we need a database of published dates and their batch of articles
             # to check if the model has already been trained
-            if pub_date in self.trained_dates and batch in self.trained_dates[pub_date]:
+            if pub_date in self.history and batch in self.history[pub_date]:
                 self.update_status(f"Skipping {pub_date} - already trained")
                 continue
 
             for batch in batch_set.batches[pub_date]:
                 # train the model on the batch
-                self.update_status(f"Training {pub_date} ")
+                self.update_status(f"training {pub_date} ")
+                start = datetime.now()
                 try:
                     # get the latest training data
                     training_data = get_latest_training_data(pub_date, [TTRAIN, TTEST])
                     # train the model
-                    start = datetime.now()
                     train_model(pub_date, training_data)
                     end = datetime.now()
                     elapsed = end - start
@@ -173,16 +111,16 @@ class ModelTrainer:
                     self.update_status(f"{pub_date} failed after {elapsed}: {e}")
                     continue
                 # log the training
-                if pub_date in self.trained_dates:
+                if pub_date in self.history:
                     # add the batch articles to the articles used in prior training
-                    s = self.trained_dates[pub_date]
+                    s = self.history[pub_date]
                     s.append(batch)
                     s = list(set(s))
                     s.sort()
-                    self.trained_dates[pub_date] = s
+                    self.history[pub_date] = s
                 else:
-                    self.trained_dates[pub_date] = batch
-                self.dump_trained_dates()
+                    self.history[pub_date] = batch
+                self.dump_history()
 
 
 def train_model(pub_date: int, training_data) -> tuple[str, pd.DataFrame]:
