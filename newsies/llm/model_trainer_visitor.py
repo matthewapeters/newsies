@@ -179,6 +179,7 @@ def train_model(pub_date: int, training_data) -> tuple[str, pd.DataFrame]:
         bias="none",
     )
     model = get_peft_model(model, lora_config)
+    model = model.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
 
     # Step 5: Train
     trainer: Trainer = None
