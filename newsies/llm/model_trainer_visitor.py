@@ -132,7 +132,6 @@ def train_model(pub_date: int, training_data) -> tuple[str, pd.DataFrame]:
         returns a tuple containing the path to the new LoRa and a dataframe of test data
     """
     lora_dir = f"lora_adapters/mistral_lora_{pub_date}_{datetime.now().strftime(r'%Y%m%d%H%M')}"
-    os.makedirs(f"./{lora_dir}", exist_ok=True)
 
     t_train_dataset = training_data[TTRAIN]
     t_test_dataset = training_data[TTEST]
@@ -182,31 +181,45 @@ def train_model(pub_date: int, training_data) -> tuple[str, pd.DataFrame]:
     model = get_peft_model(model, lora_config)
 
     # Step 5: Train
-    training_args = TrainingArguments(
-        output_dir="./news_finetune_model",
-        per_device_train_batch_size=1,
-        num_train_epochs=3,
-        logging_steps=10,
-        save_strategy="epoch",
-        evaluation_strategy="epoch",
-        fp16=True,
-        optim="adamw_torch",
-        remove_unused_columns=False,
-    )
+    trainer: Trainer = None
+    try:
+        training_args = TrainingArguments(
+            output_dir="./news_finetune_model",
+            per_device_train_batch_size=1,
+            num_train_epochs=3,
+            logging_steps=10,
+            save_strategy="epoch",
+            evaluation_strategy="epoch",
+            fp16=True,
+            optim="adamw_torch",
+            label_names=["labels"],
+        )
 
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=t_train_dataset,
-        eval_dataset=t_test_dataset,
-        tokenizer=tokenizer,
-    )
-    trainer.train()
+        trainer = Trainer(
+            model=model,
+            args=training_args,
+            train_dataset=t_train_dataset,
+            eval_dataset=t_test_dataset,
+            tokenizer=tokenizer,
+        )
+    except Exception as e:
+        print(f"Error during Trainer initialization: {e}")
+        raise
+    try:
+        trainer.train()
+    except Exception as e:
+        print(f"Training failed: {e}")
+        raise
 
     # Step 6: Save new LoRA
-    model.save_pretrained(lora_dir)
-    with open("./lora_adapters.txt", "a", encoding="utf8") as fh:
-        fh.write(f"./{lora_dir}\n")
+    try:
+        os.makedirs(f"./{lora_dir}", exist_ok=True)
+        model.save_pretrained(lora_dir)
+        with open("./lora_adapters.txt", "a", encoding="utf8") as fh:
+            fh.write(f"./{lora_dir}\n")
+    except Exception as e:
+        print(f"Error saving LoRA adapter: {e}")
+        raise
 
     # clear the cuda cache
     if torch.cuda.is_available():
