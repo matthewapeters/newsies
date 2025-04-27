@@ -136,6 +136,14 @@ def train_model(pub_date: int, training_data) -> tuple[str, pd.DataFrame]:
     t_train_dataset = training_data[TTRAIN]
     t_test_dataset = training_data[TTEST]
 
+    # Ensure the dataset includes both input_ids and labels
+    t_train_dataset.set_format(
+        type="torch", columns=["input_ids", "attention_mask", "labels"]
+    )
+    t_test_dataset.set_format(
+        type="torch", columns=["input_ids", "attention_mask", "labels"]
+    )
+
     # Step 1: Decide which model to load
     model_path = _BASE_MODEL_NAME
     if os.path.exists("./latest_merged_model.txt"):
