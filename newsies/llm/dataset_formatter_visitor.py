@@ -5,7 +5,7 @@ newsies.llm.dataset_formatter
 from datetime import datetime
 import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Dict
 
 from huggingface_hub import snapshot_download
 
@@ -42,6 +42,8 @@ def load_training_data(batchset_index: int) -> pd.DataFrame:
     load_training_data
     """
     project_root = os.path.abspath(".")
+    if isinstance(batchset_index, str):
+        batchset_index = int(batchset_index)
     df = pd.read_parquet(project_root + f"/training_data/{batchset_index:04d}")
     return df
 

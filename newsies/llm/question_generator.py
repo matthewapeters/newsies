@@ -35,7 +35,7 @@ class QuestionGenerator(Visitor):
 
     def __init__(self, number_of_questions: int = 3, batch_size: int = 8):
         super().__init__(
-            BatchSet, "training_data/question_dates.pkl", "generate questions"
+            BatchSet, "training_data/question_batches.pkl", "generate questions"
         )
         self.number_of_questions = number_of_questions
         self.batch_size = batch_size
@@ -162,6 +162,18 @@ class QuestionGenerator(Visitor):
 
         for i, dataset in enumerate(batch_set.data_sets):
             generate_questions = genereate_question_factory(i)
+
+            # Get the batch ID from the dataset
+            # and sort it to ensure consistent ordering
+            batch_id = dataset["batch"][0].split(",")
+            batch_id.sort()
+            batch_id = ",".join(batch_id)
+            # Check if the batch ID is already processed
+            if batch_id in self.history:
+                continue
+
+            ts = datetime.now()
+            self.update_status(f"processing {batch_id} - {ts}")
             dataset.map(
                 generate_questions,
                 batched=True,
@@ -169,6 +181,8 @@ class QuestionGenerator(Visitor):
                 with_indices=True,
                 num_proc=torch.cuda.device_count(),  # one process per GPU
             )
+            self.history[batch_id] = ts
+            self.dump_history()
 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()

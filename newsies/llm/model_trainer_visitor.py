@@ -39,7 +39,11 @@ def get_latest_training_data(
     get_latest_train_data
     """
     try:
-        base_dir = f"./train_test/{pub_date:04d}"
+        base_dir = "./train_test"
+        if isinstance(pub_date, int):
+            base_dir = f"./{base_dir}/{pub_date:04d}"
+        else:
+            base_dir = f"./{base_dir}/{pub_date}"
         dirs = os.listdir(base_dir)
         if len(dirs) == 0:
             raise OSError(
@@ -85,15 +89,19 @@ class ModelTrainer(Visitor):
         pub_dates = list(batch_set.batches.keys())
         pub_dates.sort()
         for pub_date in pub_dates:
-            batch = batch_set.batches[pub_date]
-            # skip any publish date that has already been trained
-            # we need a database of published dates and their batch of articles
-            # to check if the model has already been trained
-            if pub_date in self.history and batch in self.history[pub_date]:
-                self.update_status(f"Skipping {pub_date} - already trained")
-                continue
+            batches = batch_set.batches[pub_date]
+            for batch in batches:
+                batch_id = list(set(batch))
+                batch_id.sort()
+                batch_id = ",".join(batch_id)
 
-            for batch in batch_set.batches[pub_date]:
+                # skip any publish date that has already been trained
+                # we need a database of published dates and their batch of articles
+                # to check if the model has already been trained
+                if pub_date in self.history and batch_id in self.history[pub_date]:
+                    self.update_status(f"Skipping {pub_date} - already trained")
+                    continue
+
                 # train the model on the batch
                 self.update_status(f"training {pub_date} ")
                 start = datetime.now()
@@ -105,22 +113,12 @@ class ModelTrainer(Visitor):
                     end = datetime.now()
                     elapsed = end - start
                     self.update_status(f"{pub_date} complete in {elapsed}")
+                    self.history[pub_date] = batch_id
+                    self.dump_history()
                 except Exception as e:
                     end = datetime.now()
                     elapsed = end - start
                     self.update_status(f"{pub_date} failed after {elapsed}: {e}")
-                    continue
-                # log the training
-                if pub_date in self.history:
-                    # add the batch articles to the articles used in prior training
-                    s = self.history[pub_date]
-                    s.append(batch)
-                    s = list(set(s))
-                    s.sort()
-                    self.history[pub_date] = s
-                else:
-                    self.history[pub_date] = batch
-                self.dump_history()
 
 
 def train_model(pub_date: int, training_data) -> tuple[str, pd.DataFrame]:
@@ -186,7 +184,7 @@ def train_model(pub_date: int, training_data) -> tuple[str, pd.DataFrame]:
     trainer.train()
     model.save_pretrained(lora_dir)
     with open("./lora_adapters.txt", "a", encoding="utf8") as fh:
-        fh.write(f"{lora_dir}\n")
+        fh.write(f"./{lora_dir}\n")
 
     # clear the cuda cache
     if torch.cuda.is_available():
