@@ -19,3 +19,4 @@ docker/redis_data/*
 docker/redis-users.acl
 *.parquet
 *.jsonl
+lora_adapters.txt
