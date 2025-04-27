@@ -7,8 +7,8 @@ from typing import Dict, List
 import os
 
 from datasets import Dataset
+from peft import LoraConfig, get_peft_model, PeftModel
 import pandas as pd
-from peft import LoraConfig, get_peft_model
 import torch
 from transformers import (
     AutoTokenizer,
@@ -138,7 +138,7 @@ def train_model(pub_date: int, training_data) -> tuple[str, pd.DataFrame]:
     t_train_dataset = training_data[TTRAIN]
     t_test_dataset = training_data[TTEST]
 
-    # Step 5: Load Model and Apply LoRA Fine-Tuning
+    # Step 1: Load base model and tokenizer
     model = AutoModelForCausalLM.from_pretrained(
         _BASE_MODEL_NAME, torch_dtype=torch.float16, device_map="auto"
     )
@@ -152,7 +152,16 @@ def train_model(pub_date: int, training_data) -> tuple[str, pd.DataFrame]:
     if len(tokenizer) != model.config.vocab_size:
         model.resize_token_embeddings(len(tokenizer))
 
-    # LoRA Configuration
+    # Step 2: If any existing LoRA adapters are present, load them
+    if os.path.exists("./lora_adapters.txt"):
+        with open("./lora_adapters.txt", "r", encoding="utf8") as fh:
+            lines = [line.strip() for line in fh if line.strip()]
+        if lines:
+            last_lora_path = lines[-1]
+            print(f"Loading previous LoRA adapter: {last_lora_path}")
+            model = PeftModel.from_pretrained(model, last_lora_path)
+
+    # Step 3: Prepare new LoRA configuration
     lora_config = LoraConfig(
         r=8,
         lora_alpha=32,
@@ -162,16 +171,17 @@ def train_model(pub_date: int, training_data) -> tuple[str, pd.DataFrame]:
     )
     model = get_peft_model(model, lora_config)
 
+    # Step 4: Train
     training_args = TrainingArguments(
         output_dir="./news_finetune_model",
         per_device_train_batch_size=1,
         num_train_epochs=3,
         logging_steps=10,
         save_strategy="epoch",
-        evaluation_strategy="epoch",
+        eval_strategy="epoch",
         fp16=True,
         optim="adamw_torch",
-        remove_unused_columns=False,  # Ensure model gets correct inputs
+        remove_unused_columns=False,
     )
 
     trainer = Trainer(
@@ -182,6 +192,8 @@ def train_model(pub_date: int, training_data) -> tuple[str, pd.DataFrame]:
         tokenizer=tokenizer,
     )
     trainer.train()
+
+    # Step 5: Save the LoRA adapter
     model.save_pretrained(lora_dir)
     with open("./lora_adapters.txt", "a", encoding="utf8") as fh:
         fh.write(f"./{lora_dir}\n")
@@ -189,3 +201,59 @@ def train_model(pub_date: int, training_data) -> tuple[str, pd.DataFrame]:
     # clear the cuda cache
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+
+    return lora_dir, t_test_dataset
+
+
+def maybe_merge_adapters(merge_threshold: int = 5) -> None:
+    """
+    maybe_merge_adapters
+        Checks how many progressive LoRA adapters have been trained.
+        If the number meets or exceeds merge_threshold, it merges the last LoRA adapter
+        into the base model and saves it as a new merged model.
+        Also updates 'latest_merged_model.txt' with the path to the latest merged model.
+    """
+    # Read trained LoRA adapters
+    if not os.path.exists("./lora_adapters.txt"):
+        print("No lora_adapters.txt file found. Skipping merge.")
+        return
+
+    with open("./lora_adapters.txt", "r", encoding="utf8") as fh:
+        adapters = [line.strip() for line in fh if line.strip()]
+
+    if len(adapters) < merge_threshold:
+        print(
+            f"Only {len(adapters)} adapters found. "
+            f"Merge threshold is {merge_threshold}. Skipping merge."
+        )
+        return
+
+    # Load the base model
+    model = AutoModelForCausalLM.from_pretrained(
+        _BASE_MODEL_NAME, torch_dtype=torch.float16, device_map="auto"
+    )
+
+    # Load the last adapter
+    last_adapter = adapters[-1]
+    model = PeftModel.from_pretrained(model, last_adapter)
+
+    # Merge the adapter into the base model
+    model = model.merge_and_unload()
+
+    # Save the merged model
+    merged_dir = f"merged_models/merged_model_{datetime.now().strftime(r'%Y%m%d%H%M')}"
+    os.makedirs(merged_dir, exist_ok=True)
+    model.save_pretrained(merged_dir)
+
+    # Save the path of the latest merged model
+    with open("./latest_merged_model.txt", "w", encoding="utf8") as f:
+        f.write(merged_dir)
+
+    print(f"Successfully merged and saved model to {merged_dir}")
+
+    # Optionally: clear the old lora_adapters.txt after merging
+    # Comment this out if you want to keep growing adapters
+    with open("./lora_adapters.txt", "w", encoding="utf8") as fh:
+        pass  # Clears the file
+
+    print("Cleared lora_adapters.txt after merge.")
