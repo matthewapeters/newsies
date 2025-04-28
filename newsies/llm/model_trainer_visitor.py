@@ -13,7 +13,7 @@ import torch
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
-    default_data_collator,
+    DataCollatorForLanguageModeling,
     TrainingArguments,
     Trainer,
 )
@@ -192,6 +192,16 @@ def train_model(pub_date: int, training_data) -> tuple[str, pd.DataFrame]:
         model_path, torch_dtype=torch.float16, device_map="auto"
     )
 
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
+
+    # Ensure the tokenizer has a padding token
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token  # Use EOS token for padding
+
+    # Resize token embeddings if a new pad token was added
+    if len(tokenizer) != model.config.vocab_size:
+        model.resize_token_embeddings(len(tokenizer))
+
     # Step 3: Load previous LoRA adapter if it exists
     if os.path.exists("./lora_adapters.txt"):
         with open("./lora_adapters.txt", "r", encoding="utf8") as fh:
@@ -227,6 +237,11 @@ def train_model(pub_date: int, training_data) -> tuple[str, pd.DataFrame]:
             label_names=["labels"],
         )
 
+        data_collator = DataCollatorForLanguageModeling(
+            tokenizer=tokenizer,
+            mlm=False,  # because it's causal LM (not masked LM)
+        )
+
         validate_dataset(t_train_dataset)
         validate_dataset(t_eval_dataset)
 
@@ -235,7 +250,7 @@ def train_model(pub_date: int, training_data) -> tuple[str, pd.DataFrame]:
             args=training_args,
             train_dataset=t_train_dataset,
             eval_dataset=t_eval_dataset,
-            data_collator=default_data_collator,
+            data_collator=data_collator,
         )
     except Exception as e:
         print(f"Error during Trainer initialization: {e}")
