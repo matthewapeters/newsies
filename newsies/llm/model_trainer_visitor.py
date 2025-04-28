@@ -7,6 +7,7 @@ from typing import Dict, List
 import os
 
 from datasets import Dataset
+from torch.utils.data import Dataset as TorchDataset
 from peft import LoraConfig, get_peft_model, PeftModel
 import pandas as pd
 import torch
@@ -30,6 +31,33 @@ TEST = "test"
 TTRAIN = "token_train"
 TTEST = "token_test"
 _TRAIN_DATA_TYPES = [TRAIN, TEST, TTRAIN, TTEST]
+
+
+class FastEncodedDataset(Dataset):
+    """
+    FastEncodedDataset class is used to load the dataset into memory.
+    """
+
+    def __init__(self, dataset):
+        super().__init__()
+        # Actually load the tensors into memory
+
+        def ensure_tensor(x):
+            return x if isinstance(x, torch.Tensor) else torch.tensor(x)
+
+        self.input_ids = ensure_tensor(dataset["input_ids"])
+        self.attention_mask = ensure_tensor(dataset["attention_mask"])
+        self.labels = ensure_tensor(dataset["labels"])
+
+    def __len__(self):
+        return len(self.input_ids)
+
+    def __getitem__(self, idx):
+        return {
+            "input_ids": self.input_ids[idx],
+            "attention_mask": self.attention_mask[idx],
+            "labels": self.labels[idx],
+        }
 
 
 def get_latest_training_data(
@@ -134,15 +162,22 @@ def train_model(pub_date: int, training_data) -> tuple[str, pd.DataFrame]:
     lora_dir = f"lora_adapters/mistral_lora_{pub_date}_{datetime.now().strftime(r'%Y%m%d%H%M')}"
 
     t_train_dataset = training_data[TTRAIN]
-    t_test_dataset = training_data[TTEST]
+    t_eval_dataset = training_data[TTEST]
 
     # Ensure the dataset includes both input_ids and labels
     t_train_dataset.set_format(
         type="torch", columns=["input_ids", "attention_mask", "labels"]
     )
-    t_test_dataset.set_format(
+    t_eval_dataset.set_format(
         type="torch", columns=["input_ids", "attention_mask", "labels"]
     )
+    # remove unwanted columns
+    t_train_dataset = t_train_dataset.remove_columns(["pubdate", "batch"])
+    t_eval_dataset = t_eval_dataset.remove_columns(["pubdate", "batch"])
+
+    # wrap datasets
+    train_dataset = FastEncodedDataset(t_train_dataset)
+    eval_dataset = FastEncodedDataset(t_eval_dataset)
 
     # Step 1: Decide which model to load
     model_path = _BASE_MODEL_NAME
@@ -207,8 +242,8 @@ def train_model(pub_date: int, training_data) -> tuple[str, pd.DataFrame]:
         trainer = Trainer(
             model=model,
             args=training_args,
-            train_dataset=t_train_dataset,
-            eval_dataset=t_test_dataset,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
             tokenizer=tokenizer,
         )
     except Exception as e:
@@ -234,7 +269,7 @@ def train_model(pub_date: int, training_data) -> tuple[str, pd.DataFrame]:
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
-    return lora_dir, t_test_dataset
+    return lora_dir, t_eval_dataset
 
 
 def maybe_merge_adapters(merge_threshold: int = 5) -> None:
