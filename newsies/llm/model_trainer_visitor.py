@@ -33,7 +33,7 @@ TTEST = "token_test"
 _TRAIN_DATA_TYPES = [TRAIN, TEST, TTRAIN, TTEST]
 
 
-class FastEncodedDataset(Dataset):
+class FastEncodedDataset(TorchDataset):
     """
     FastEncodedDataset class is used to load the dataset into memory.
     """
@@ -175,9 +175,15 @@ def train_model(pub_date: int, training_data) -> tuple[str, pd.DataFrame]:
     t_train_dataset = t_train_dataset.remove_columns(["pubdate", "batch"])
     t_eval_dataset = t_eval_dataset.remove_columns(["pubdate", "batch"])
 
-    # wrap datasets
-    train_dataset = FastEncodedDataset(t_train_dataset)
-    eval_dataset = FastEncodedDataset(t_eval_dataset)
+    train_dataset: FastEncodedDataset
+    eval_dataset: FastEncodedDataset
+    try:
+        # wrap datasets
+        train_dataset = FastEncodedDataset(t_train_dataset)
+        eval_dataset = FastEncodedDataset(t_eval_dataset)
+    except Exception as e:
+        print(f"Error wrapping datasets: {e}")
+        raise
 
     # Step 1: Decide which model to load
     model_path = _BASE_MODEL_NAME
