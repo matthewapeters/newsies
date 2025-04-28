@@ -553,7 +553,7 @@ def train_model() -> tuple[str, pd.DataFrame]:
         num_train_epochs=3,
         logging_steps=10,
         save_strategy="epoch",
-        evaluation_strategy="epoch",
+        eval_strategy="epoch",
         fp16=True,
         optim="adamw_torch",
         remove_unused_columns=False,  # Ensure model gets correct inputs

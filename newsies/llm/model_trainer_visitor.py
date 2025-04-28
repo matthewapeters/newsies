@@ -7,13 +7,13 @@ from typing import Dict, List
 import os
 
 from datasets import Dataset
-from torch.utils.data import Dataset as TorchDataset
 from peft import LoraConfig, get_peft_model, PeftModel
 import pandas as pd
 import torch
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
+    default_data_collator,
     TrainingArguments,
     Trainer,
 )
@@ -33,31 +33,31 @@ TTEST = "token_test"
 _TRAIN_DATA_TYPES = [TRAIN, TEST, TTRAIN, TTEST]
 
 
-class FastEncodedDataset(TorchDataset):
+def validate_dataset(
+    dataset, required_columns=("input_ids", "attention_mask", "labels")
+):
     """
-    FastEncodedDataset class is used to load the dataset into memory.
+    Checks that dataset has required columns and that they are torch Tensors.
     """
+    # Check if all required columns exist
+    missing_columns = [
+        col for col in required_columns if col not in dataset.column_names
+    ]
+    if missing_columns:
+        raise ValueError(f"Dataset is missing required columns: {missing_columns}")
 
-    def __init__(self, dataset):
-        super().__init__()
-        # Actually load the tensors into memory
+    # Check if dataset is properly formatted as torch tensors
+    if not all(
+        isinstance(dataset[i][col], torch.Tensor)
+        for col in required_columns
+        for i in range(min(5, len(dataset)))
+    ):
+        raise ValueError(
+            "Dataset columns are not formatted as torch.Tensor. "
+            "Did you forget set_format(type='torch')?"
+        )
 
-        def ensure_tensor(x):
-            return x if isinstance(x, torch.Tensor) else torch.tensor(x)
-
-        self.input_ids = ensure_tensor(dataset["input_ids"])
-        self.attention_mask = ensure_tensor(dataset["attention_mask"])
-        self.labels = ensure_tensor(dataset["labels"])
-
-    def __len__(self):
-        return len(self.input_ids)
-
-    def __getitem__(self, idx):
-        return {
-            "input_ids": self.input_ids[idx],
-            "attention_mask": self.attention_mask[idx],
-            "labels": self.labels[idx],
-        }
+    print(f"✅ Dataset validation passed with columns: {dataset.column_names}")
 
 
 def get_latest_training_data(
@@ -164,6 +164,10 @@ def train_model(pub_date: int, training_data) -> tuple[str, pd.DataFrame]:
     t_train_dataset = training_data[TTRAIN]
     t_eval_dataset = training_data[TTEST]
 
+    # remove unwanted columns
+    t_train_dataset = t_train_dataset.remove_columns(["pubdate", "batch"])
+    t_eval_dataset = t_eval_dataset.remove_columns(["pubdate", "batch"])
+
     # Ensure the dataset includes both input_ids and labels
     t_train_dataset.set_format(
         type="torch", columns=["input_ids", "attention_mask", "labels"]
@@ -171,19 +175,6 @@ def train_model(pub_date: int, training_data) -> tuple[str, pd.DataFrame]:
     t_eval_dataset.set_format(
         type="torch", columns=["input_ids", "attention_mask", "labels"]
     )
-    # remove unwanted columns
-    t_train_dataset = t_train_dataset.remove_columns(["pubdate", "batch"])
-    t_eval_dataset = t_eval_dataset.remove_columns(["pubdate", "batch"])
-
-    train_dataset: FastEncodedDataset
-    eval_dataset: FastEncodedDataset
-    try:
-        # wrap datasets
-        train_dataset = FastEncodedDataset(t_train_dataset)
-        eval_dataset = FastEncodedDataset(t_eval_dataset)
-    except Exception as e:
-        print(f"Error wrapping datasets: {e}")
-        raise
 
     # Step 1: Decide which model to load
     model_path = _BASE_MODEL_NAME
@@ -196,19 +187,10 @@ def train_model(pub_date: int, training_data) -> tuple[str, pd.DataFrame]:
         else:
             print("Merged model path invalid. Falling back to base model.")
 
-    # Step 2: Load model and tokenizer
+    # Step 2: Load model - tokenizer not needed as data is already tokenized
     model = AutoModelForCausalLM.from_pretrained(
         model_path, torch_dtype=torch.float16, device_map="auto"
     )
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
-
-    # Ensure the tokenizer has a padding token
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token  # Use EOS token for padding
-
-    # Resize token embeddings if a new pad token was added
-    if len(tokenizer) != model.config.vocab_size:
-        model.resize_token_embeddings(len(tokenizer))
 
     # Step 3: Load previous LoRA adapter if it exists
     if os.path.exists("./lora_adapters.txt"):
@@ -245,12 +227,15 @@ def train_model(pub_date: int, training_data) -> tuple[str, pd.DataFrame]:
             label_names=["labels"],
         )
 
+        validate_dataset(t_train_dataset)
+        validate_dataset(t_eval_dataset)
+
         trainer = Trainer(
             model=model,
             args=training_args,
-            train_dataset=train_dataset,
-            eval_dataset=eval_dataset,
-            tokenizer=tokenizer,
+            train_dataset=t_train_dataset,
+            eval_dataset=t_eval_dataset,
+            data_collator=default_data_collator,
         )
     except Exception as e:
         print(f"Error during Trainer initialization: {e}")
