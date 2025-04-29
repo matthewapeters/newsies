@@ -73,6 +73,7 @@ def run_analyze(task_id: str, archive: str = None):
     try:
         analyze_pipeline(task_id, archive)
         gc.collect()
+
     finally:
         RUN_LOCK.release()
 
