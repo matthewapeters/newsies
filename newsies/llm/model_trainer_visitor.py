@@ -120,7 +120,7 @@ class ModelTrainer(Visitor):
                     log_gpu_memory("After Cleanup")
                     end = datetime.now()
                     elapsed = end - start
-                    _msg = f"{OK} {pub_date} complete in {elapsed}"
+                    _msg = f"{NEWSIES}{OK} {pub_date} complete in {elapsed}"
                     print(_msg)
                     self.update_status(_msg)
                     self.history[pub_date] = batch_id
@@ -128,35 +128,35 @@ class ModelTrainer(Visitor):
                 except TimeoutException as te:
                     end = datetime.now()
                     elapsed = end - start
-                    _msg = f"{FAIL} {pub_date} failed after {elapsed}: {te}"
+                    _msg = f"{NEWSIES}{FAIL} {pub_date} failed after {elapsed}: {te}"
                     print(_msg)
                     self.update_status(_msg)
                     raise te
                 except MemoryError as me:
                     end = datetime.now()
                     elapsed = end - start
-                    _msg = f"{FAIL} {pub_date} failed after {elapsed}: {me}"
+                    _msg = f"{NEWSIES}{FAIL} {pub_date} failed after {elapsed}: {me}"
                     print(_msg)
                     self.update_status(_msg)
                     raise me
                 except torch.OutOfMemoryError as ome:
                     end = datetime.now()
                     elapsed = end - start
-                    _msg = f"{FAIL} {pub_date} failed after {elapsed}: {ome}"
+                    _msg = f"{NEWSIES}{FAIL} {pub_date} failed after {elapsed}: {ome}"
                     print(_msg)
                     self.update_status(_msg)
                     raise ome
                 except RuntimeError as re:
                     end = datetime.now()
                     elapsed = end - start
-                    _msg = f"{FAIL} {pub_date} failed after {elapsed}: {re}"
+                    _msg = f"{NEWSIES}{FAIL} {pub_date} failed after {elapsed}: {re}"
                     print(_msg)
                     self.update_status(_msg)
                     raise re
                 except Exception as e:
                     end = datetime.now()
                     elapsed = end - start
-                    _msg = f"{WARN} {pub_date} failed after {elapsed}: {e}"
+                    _msg = f"{NEWSIES}{WARN} {pub_date} failed after {elapsed}: {e}"
                     print(_msg)
                     self.update_status()
 
@@ -393,7 +393,8 @@ def wait_for_cuda_memory(target_gb: float = 10.0, max_wait_sec: int = 60):
         elapsed = time.time() - start
         if elapsed > max_wait_sec:
             raise TimeoutException(
-                f"️{CLEAN}{WARN} Timeout: Only {available_gb:.2f} GiB available after {max_wait_sec} sec."
+                f"️{CLEAN}{WARN} Timeout: Only {available_gb:.2f} "
+                f"GiB available after {max_wait_sec} sec."
             )
 
         print(
