@@ -530,7 +530,7 @@ def load_base_model_with_lora(training_mode: bool = True) -> torch.nn.Module:
                 f"got: {peft_config.base_model_name_or_path}"
             )
 
-        print(f"{SEARCH} Loading latest LoRA adapter: {last_lora_path}")
+        print(f"{TRAINING}{SEARCH} Loading latest LoRA adapter: {last_lora_path}")
         model = PeftModel.from_pretrained(
             model, last_lora_path, torch_dtype=torch.float16
         )
@@ -550,11 +550,13 @@ def load_base_model_with_lora(training_mode: bool = True) -> torch.nn.Module:
             return model
 
         if len(adapters) > 1 and hasattr(model, "merge_and_unload"):
-            print(f"{INFO} Merging previous LoRA into model (before applying new)...")
+            print(
+                f"{PACKAGE}{INFO} Merging previous LoRA into model (before applying new)..."
+            )
             model = model.merge_and_unload()
             torch.cuda.empty_cache()
 
-    print(f"{INFO} Applying new LoRA adapter for training...")
+    print(f"{TRAINING}{INFO} Applying new LoRA adapter for training...")
     lora_config = LoraConfig(
         r=8,
         lora_alpha=32,
