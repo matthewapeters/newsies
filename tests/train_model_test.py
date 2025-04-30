@@ -139,6 +139,20 @@ def test__build_batches():
     v.visit(batch_set)
 
 
+def test__trainer_visitor():
+    """
+    test__trainer_visitor
+    """
+    batches = get_archive().build_batches()
+    batch_set = BatchSet(batches)
+
+    # Train the model
+    v = ModelTrainer()
+    # setting these allows status update as we iterate through the batches
+    # if either is not set, the status will not update
+    v.visit(batch_set)
+
+
 def test__generate_qa_pairs():
     """
     test__generate_qa_pairs

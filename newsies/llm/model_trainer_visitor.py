@@ -9,7 +9,7 @@ import os
 import time
 
 from datasets import Dataset
-from peft import LoraConfig, get_peft_model, PeftModel
+from peft import LoraConfig, get_peft_model, PeftModel, PeftConfig
 import pandas as pd
 import torch
 from transformers import (
@@ -37,11 +37,12 @@ TTEST = "token_test"
 _TRAIN_DATA_TYPES = [TRAIN, TEST, TTRAIN, TTEST]
 
 
+FAIL = "❌"
+INFO = "ℹ️"
 OK = "✅"
 SEARCH = "🔍"
 WAIT = "⏳"
 WARN = "⚠️"
-FAIL = "❌"
 
 
 class ModelTrainer(Visitor):
@@ -86,7 +87,7 @@ class ModelTrainer(Visitor):
                 start = datetime.now()
                 try:
                     wait_for_cuda_memory(target_gb=12.0, max_wait_sec=180)
-                    log_gpu_memory("Before training")
+                    log_gpu_memory("Before getting trainer and model")
                     try:
                         t_train_dataset, t_eval_dataset = get_train_and_test_data(
                             pub_date
@@ -99,18 +100,22 @@ class ModelTrainer(Visitor):
                     trainer, model, tokenizer = get_trainer(
                         t_train_dataset, t_eval_dataset
                     )
+                    log_gpu_memory("After get_trainer() before train_model()")
                     train_model(trainer)
-                    save_model(pub_date, model)
+                    log_gpu_memory("After training")
+                    save_lora_adapter(pub_date, model)
+                    log_gpu_memory("After saving LoRA")
                     maybe_merge_adapters(merge_threshold=5)
+                    log_gpu_memory("After Maybe Merge")
                     cleanup(
                         model,
                         tokenizer,
                         trainer,
                     )
-                    log_gpu_memory("After training")
+                    log_gpu_memory("After Cleanup")
                     end = datetime.now()
                     elapsed = end - start
-                    _msg = f"{FAIL} {pub_date} complete in {elapsed}"
+                    _msg = f"{OK} {pub_date} complete in {elapsed}"
                     print(_msg)
                     self.update_status(_msg)
                     self.history[pub_date] = batch_id
@@ -136,6 +141,13 @@ class ModelTrainer(Visitor):
                     print(_msg)
                     self.update_status(_msg)
                     raise ome
+                except RuntimeError as re:
+                    end = datetime.now()
+                    elapsed = end - start
+                    _msg = f"{FAIL} {pub_date} failed after {elapsed}: {re}"
+                    print(_msg)
+                    self.update_status(_msg)
+                    raise re
                 except Exception as e:
                     end = datetime.now()
                     elapsed = end - start
@@ -172,83 +184,58 @@ def get_train_and_test_data(pub_date: int) -> Dict[str, pd.DataFrame]:
     return t_train_dataset, t_eval_dataset
 
 
-def get_trainer(t_train_dataset, t_eval_dataset) -> ModelTrainer:
+def get_trainer(
+    t_train_dataset, t_eval_dataset
+) -> tuple[Trainer, torch.nn.Module, AutoTokenizer]:
     """
     get_trainer
-        Returns a new instance of the ModelTrainer class.
+        Safely builds and returns a Trainer object, along with the model and tokenizer.
     """
-    # Decide which model to load
+
+    # get the model with the latest LoRA adapter
+    model = load_base_model_with_lora(training_mode=True)
+    log_gpu_memory("in get_trainer() after loading model (training_mode=True)")
+
+    # get the tokenizer
     model_path = _BASE_MODEL_NAME
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
 
-    # Always load the model first
-    base_model = AutoModelForCausalLM.from_pretrained(
-        model_path, torch_dtype=torch.float16, device_map="auto"
-    )
-
-    tokenizer = AutoTokenizer.from_pretrained(_BASE_MODEL_NAME)
-
-    # Ensure the tokenizer has a padding token
     if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token  # Use EOS token for padding
+        tokenizer.pad_token = tokenizer.eos_token  # Required for collator
 
-    if len(tokenizer) != base_model.config.vocab_size:
-        base_model.resize_token_embeddings(len(tokenizer))
+    if len(tokenizer) != model.config.vocab_size:
+        model.resize_token_embeddings(len(tokenizer))
 
-    # Apply previous LoRA if it exists
-    if os.path.exists("./lora_adapters.txt"):
-        with open("./lora_adapters.txt", "r", encoding="utf8") as fh:
-            adapters = [line.strip() for line in fh if line.strip()]
-        if adapters:
-            last_lora_path = adapters[-1]
-            print(f"{SEARCH} Loading previous LoRA adapter: {last_lora_path}")
-            base_model = PeftModel.from_pretrained(
-                base_model, last_lora_path, torch_dtype=torch.float16
-            )
-
-    lora_config = LoraConfig(
-        r=8,
-        lora_alpha=32,
-        target_modules=["q_proj", "v_proj"],
-        lora_dropout=0.05,
-        bias="none",
-    )
-    base_model = get_peft_model(base_model, lora_config)
-
-    trainer: Trainer = None
-
+    # Select batch size
     batch_sizes = [24, 16, 12, 8, 4, 2, 1]
     selected_batch_size = auto_select_batch_size(batch_sizes)
 
-    try:
-        training_args = TrainingArguments(
-            output_dir="./news_finetune_model",
-            per_device_train_batch_size=selected_batch_size,
-            num_train_epochs=3,
-            logging_steps=10,
-            save_strategy="epoch",
-            eval_strategy="epoch",
-            fp16=True,
-            optim="adamw_torch",
-            remove_unused_columns=False,
-        )
+    training_args = TrainingArguments(
+        output_dir="./news_finetune_model",
+        per_device_train_batch_size=selected_batch_size,
+        num_train_epochs=3,
+        logging_steps=10,
+        save_strategy="epoch",
+        eval_strategy="epoch",
+        fp16=True,
+        optim="adamw_torch",
+        remove_unused_columns=False,
+    )
 
-        data_collator = DataCollatorForLanguageModeling(
-            tokenizer=tokenizer,
-            mlm=False,  # because it's causal LM (not masked LM)
-        )
+    data_collator = DataCollatorForLanguageModeling(
+        tokenizer=tokenizer,
+        mlm=False,
+    )
 
-        trainer = Trainer(
-            model=base_model,
-            args=training_args,
-            train_dataset=t_train_dataset,
-            eval_dataset=t_eval_dataset,
-            data_collator=data_collator,
-        )
-    except Exception as e:
-        print(f"{WARN} Error during Trainer initialization: {e}")
-        raise
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=t_train_dataset,
+        eval_dataset=t_eval_dataset,
+        data_collator=data_collator,
+    )
 
-    return trainer, base_model, tokenizer
+    return trainer, model, tokenizer
 
 
 def train_model(trainer) -> tuple[str, pd.DataFrame]:
@@ -268,8 +255,8 @@ def train_model(trainer) -> tuple[str, pd.DataFrame]:
         raise
 
 
-def save_model(pub_date, model) -> None:
-    """save_model"""
+def save_lora_adapter(pub_date, model) -> None:
+    """save_lora_adapter"""
     try:
         lora_dir = f"lora_adapters/mistral_lora_{pub_date}_{datetime.now().strftime(r'%Y%m%d%H%M')}"
         os.makedirs(f"./{lora_dir}", exist_ok=True)
@@ -336,34 +323,26 @@ def maybe_merge_adapters(merge_threshold: int = 5) -> None:
     with open("./lora_adapters.txt", "r", encoding="utf8", newline="") as fh:
         adapters = [line.strip() for line in fh if line.strip()]
 
-    if len(adapters) % merge_threshold == 0:
+    if len(adapters) % merge_threshold != 0:
         print(
             f"️{WARN} Only {len(adapters)} adapters found. "
             f"Merge modulo is {merge_threshold}. Skipping merge."
         )
         return
 
-    # Step 1: Decide which model to load
-    model_path = _BASE_MODEL_NAME
-    # Step 2: Load model and tokenizer
-    model = AutoModelForCausalLM.from_pretrained(
-        model_path, torch_dtype=torch.float16, device_map="auto"
-    )
+    # Step 1: Load model with the latest LoRA adapter
+    model = load_base_model_with_lora(training_mode=False)
+    log_gpu_memory("after loading model (training_mode=False)")
 
-    # Step 3: Load only the latest adapter
-    last_adapter = adapters[-1]
-    print(f"{WAIT} Applying latest adapter: {last_adapter}")
-    model = PeftModel.from_pretrained(model, last_adapter)
-
-    # Step 4: Merge the adapter into the model
+    # Step 2: Merge the adapter into the model
     model = model.merge_and_unload()
 
-    # Step 5: Save the merged model
+    # Step 3: Save the merged model
     merged_dir = f"merged_models/merged_model_{datetime.now().strftime(r'%Y%m%d%H%M')}"
     os.makedirs(merged_dir, exist_ok=True)
     model.save_pretrained(merged_dir)
 
-    # Step 6: Save the path of the latest merged model
+    # Step 4: Save the path of the latest merged model
     with open("./latest_merged_model.txt", "w", encoding="utf8", newline="") as f:
         f.write(merged_dir)
 
@@ -509,3 +488,70 @@ def get_latest_training_data(
             "Please run get_train_and_test_data() first."
         ) from e
     return train_dict
+
+
+def load_base_model_with_lora(training_mode: bool) -> torch.nn.Module:
+    """
+    Loads the base model and applies the latest LoRA adapter (if any).
+
+    If `training_mode=True`:
+        - merge the previous adapter if it's not the first one,
+        - then apply a new adapter.
+
+    If `training_mode=False`:
+        - merge the most recent adapter into the base model (for export).
+    """
+    model = AutoModelForCausalLM.from_pretrained(
+        _BASE_MODEL_NAME, torch_dtype=torch.float16, device_map=None
+    )
+
+    adapters = []
+    if os.path.exists("./lora_adapters.txt"):
+        with open("./lora_adapters.txt", "r", encoding="utf8") as fh:
+            adapters = [line.strip() for line in fh if line.strip()]
+
+    if adapters:
+        last_lora_path = adapters[-1]
+        peft_config = PeftConfig.from_pretrained(last_lora_path)
+
+        if (
+            peft_config.base_model_name_or_path
+            and peft_config.base_model_name_or_path != _BASE_MODEL_NAME
+        ):
+            raise RuntimeError(
+                f"Incompatible adapter. Expected base: {_BASE_MODEL_NAME}, "
+                f"got: {peft_config.base_model_name_or_path}"
+            )
+
+        print(f"{SEARCH} Loading latest LoRA adapter: {last_lora_path}")
+        model = PeftModel.from_pretrained(
+            model, last_lora_path, torch_dtype=torch.float16
+        )
+
+        if not training_mode:
+            print(f"{INFO} Merging adapter for inference...")
+            model = model.merge_and_unload()
+            torch.cuda.empty_cache()
+
+        if training_mode and len(adapters) > 1 and hasattr(model, "merge_and_unload"):
+            print(f"{INFO} Merging previous LoRA into model (before applying new)...")
+            model = model.merge_and_unload()
+            torch.cuda.empty_cache()
+
+    if training_mode:
+        print(f"{INFO} Applying new LoRA adapter for training...")
+        lora_config = LoraConfig(
+            r=8,
+            lora_alpha=32,
+            target_modules=["q_proj", "v_proj"],
+            lora_dropout=0.05,
+            bias="none",
+        )
+        model = get_peft_model(model, lora_config)
+
+    model.to("cuda")
+    torch.cuda.empty_cache()
+    gc.collect()
+    time.sleep(1)
+    gc.collect()
+    return model
