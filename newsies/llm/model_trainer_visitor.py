@@ -36,11 +36,16 @@ TTRAIN = "token_train"
 TTEST = "token_test"
 _TRAIN_DATA_TYPES = [TRAIN, TEST, TTRAIN, TTEST]
 
-
+BOOKS = "📚"
+CLEAN = "🧹"
+DISK = "💾"
 FAIL = "❌"
 INFO = "ℹ️"
+NEWSIES = "📰"
 OK = "✅"
+PACKAGE = "📦"
 SEARCH = "🔍"
+TRAINING = "🧠"
 WAIT = "⏳"
 WARN = "⚠️"
 
@@ -181,6 +186,7 @@ def get_train_and_test_data(pub_date: int) -> Dict[str, pd.DataFrame]:
     )
     validate_dataset(t_train_dataset)
     validate_dataset(t_eval_dataset)
+    print(f"{BOOKS}{OK} Training data loaded and validated.")
     return t_train_dataset, t_eval_dataset
 
 
@@ -250,8 +256,9 @@ def train_model(trainer) -> tuple[str, pd.DataFrame]:
     try:
         trainer.train()
         torch.cuda.synchronize()
+        print(f"{TRAIN}{OK} Training complete.")
     except Exception as e:
-        print(f"️{WARN} Training failed: {e}")
+        print(f"️{TRAIN}{WARN} Training failed: {e}")
         raise
 
 
@@ -263,8 +270,9 @@ def save_lora_adapter(pub_date, model) -> None:
         model.save_pretrained(lora_dir)
         with open("./lora_adapters.txt", "a", encoding="utf8") as fh:
             fh.write(f"./{lora_dir}\n")
+        print(f"{DISK}{OK} LoRA adapter saved to {lora_dir}")
     except Exception as e:
-        print(f"️{WARN} Error saving LoRA adapter: {e}")
+        print(f"️{DISK}{WARN} Error saving LoRA adapter: {e}")
         raise
 
 
@@ -278,12 +286,12 @@ def cleanup(model, tokenizer, trainer) -> None:
             model.cpu()  # Move model to CPU to free GPU memory
             del model
         except Exception as e:
-            print(f"Error deleting model: {e}")
+            print(f"{CLEAN}{WARN} Error deleting model: {e}")
     if tokenizer:
         try:
             del tokenizer
         except Exception as e:
-            print(f"Error deleting tokenizer: {e}")
+            print(f"{CLEAN}{WARN} Error deleting tokenizer: {e}")
     if trainer:
         try:
             if hasattr(trainer, "model"):
@@ -296,7 +304,7 @@ def cleanup(model, tokenizer, trainer) -> None:
             trainer.tokenizer = None
             del trainer
         except Exception as e:
-            print(f"Error deleting trainer: {e}")
+            print(f"{CLEAN}{WARN} Error deleting trainer: {e}")
     gc.collect()
     time.sleep(1)
     gc.collect()
@@ -305,7 +313,7 @@ def cleanup(model, tokenizer, trainer) -> None:
         torch.cuda.empty_cache()
         torch.cuda.ipc_collect()
 
-    print("Cleanup complete.")
+    print("{CLEAN}{OK} Cleanup complete.")
 
 
 def maybe_merge_adapters(merge_threshold: int = 5) -> None:
@@ -317,7 +325,7 @@ def maybe_merge_adapters(merge_threshold: int = 5) -> None:
         Also updates 'latest_merged_model.txt' with the path to the latest merged model.
     """
     if not os.path.exists("./lora_adapters.txt"):
-        print("No lora_adapters.txt file found. Skipping merge.")
+        print(f"{INFO} No lora_adapters.txt file found. Skipping merge.")
         return
 
     with open("./lora_adapters.txt", "r", encoding="utf8", newline="") as fh:
@@ -325,7 +333,7 @@ def maybe_merge_adapters(merge_threshold: int = 5) -> None:
 
     if len(adapters) % merge_threshold != 0:
         print(
-            f"️{WARN} Only {len(adapters)} adapters found. "
+            f"️{PACKAGE}{WAIT} Only {len(adapters)} adapters found. "
             f"Merge modulo is {merge_threshold}. Skipping merge."
         )
         return
@@ -334,20 +342,16 @@ def maybe_merge_adapters(merge_threshold: int = 5) -> None:
     model = load_base_model_with_lora(training_mode=False)
     log_gpu_memory("after loading model (training_mode=False)")
 
-    # Step 2: Merge the adapter into the model
-    model = model.merge_and_unload()
-
-    # Step 3: Save the merged model
+    # Step 2: Save the merged model
     merged_dir = f"merged_models/merged_model_{datetime.now().strftime(r'%Y%m%d%H%M')}"
     os.makedirs(merged_dir, exist_ok=True)
     model.save_pretrained(merged_dir)
 
-    # Step 4: Save the path of the latest merged model
+    # Step 3: Save the path of the latest merged model
     with open("./latest_merged_model.txt", "w", encoding="utf8", newline="") as f:
         f.write(merged_dir)
 
-    print(f"{OK} Successfully merged and saved model to {merged_dir}")
-
+    print(f"{PACKAGE}{OK} Successfully merged and saved model to {merged_dir}")
     cleanup(model, None, None)
 
 
@@ -382,18 +386,18 @@ def wait_for_cuda_memory(target_gb: float = 10.0, max_wait_sec: int = 60):
 
         if available_gb >= target_gb:
             print(
-                f"{OK} Sufficient GPU memory restored: {available_gb:.2f} GiB available."
+                f"{CLEAN}{OK} Sufficient GPU memory restored: {available_gb:.2f} GiB available."
             )
             break
 
         elapsed = time.time() - start
         if elapsed > max_wait_sec:
             raise TimeoutException(
-                f"️{WARN} Timeout: Only {available_gb:.2f} GiB available after {max_wait_sec} sec."
+                f"️{CLEAN}{WARN} Timeout: Only {available_gb:.2f} GiB available after {max_wait_sec} sec."
             )
 
         print(
-            f"{WAIT} Waiting for GPU memory to flush... {available_gb:.2f} GiB available"
+            f"{CLEAN}{WAIT} Waiting for GPU memory to flush... {available_gb:.2f} GiB available"
         )
         time.sleep(2)  # Let CUDA finish releasing memory
 
@@ -405,7 +409,7 @@ def log_gpu_memory(context=""):
     allocated = torch.cuda.memory_allocated()
     free = total - reserved - allocated
     print(
-        f"{SEARCH} [{context}] Allocated: {allocated / 1e9:.2f} GB | "
+        f"{SEARCH}{INFO} [{context}] Allocated: {allocated / 1e9:.2f} GB | "
         f"Reserved: {reserved / 1e9:.2f} GB | Free: {free / 1e9:.2f} GB"
     )
 
@@ -417,7 +421,7 @@ def auto_select_batch_size(possible_batch_sizes: list[int]) -> int:
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if not torch.cuda.is_available():
-        print(f"{WARN} No CUDA device available. Defaulting to batch size 1.")
+        print(f"{TRAINING}{WARN} No CUDA device available. Defaulting to batch size 1.")
         return 1
 
     torch.cuda.empty_cache()
@@ -426,7 +430,9 @@ def auto_select_batch_size(possible_batch_sizes: list[int]) -> int:
     allocated_memory = torch.cuda.memory_allocated(device)
     available_memory = max_memory - reserved_memory - allocated_memory
 
-    print(f"🔍 Available GPU memory: {available_memory / (1024**3):.2f} GiB")
+    print(
+        f"{TRAINING}{SEARCH} Available GPU memory: {available_memory / (1024**3):.2f} GiB"
+    )
 
     # Start from largest batch size and work down
     for batch_size in sorted(possible_batch_sizes, reverse=True):
@@ -434,10 +440,10 @@ def auto_select_batch_size(possible_batch_sizes: list[int]) -> int:
         expected_usage = batch_size * 0.5 * (1024**3)  # 0.5 GB per sample
 
         if expected_usage < available_memory * 0.8:  # Use 80% of available
-            print(f"{OK} Selected batch size: {batch_size}")
+            print(f"{TRAINING}{OK} Selected batch size: {batch_size}")
             return batch_size
 
-    print(f"️️{WARN} Defaulting to batch size 1.")
+    print(f"️️{TRAINING}{WARN} Defaulting to batch size 1.")
     return 1
 
 
@@ -448,12 +454,12 @@ def validate_dataset(ds):
     required_columns = {"input_ids", "attention_mask", "labels"}
     assert set(ds.column_names).issuperset(
         required_columns
-    ), f"️{WARN} Dataset columns missing: {required_columns - set(ds.column_names)}"
+    ), f"️{BOOKS}{WARN} Dataset columns missing: {required_columns - set(ds.column_names)}"
     for idx in range(min(10, len(ds))):  # Just sample 10 rows for sanity check
         row = ds[idx]
         for col in required_columns:
-            assert col in row, f"️{WARN} Missing column {col} in row {idx}"
-        assert len(row["input_ids"]) > 0, f"Empty input_ids at row {idx}"
+            assert col in row, f"️{BOOKS}{WARN} Missing column {col} in row {idx}"
+        assert len(row["input_ids"]) > 0, f"{BOOKS}{WARN} Empty input_ids at row {idx}"
 
 
 def get_latest_training_data(
@@ -490,7 +496,7 @@ def get_latest_training_data(
     return train_dict
 
 
-def load_base_model_with_lora(training_mode: bool) -> torch.nn.Module:
+def load_base_model_with_lora(training_mode: bool = True) -> torch.nn.Module:
     """
     Loads the base model and applies the latest LoRA adapter (if any).
 
@@ -499,10 +505,11 @@ def load_base_model_with_lora(training_mode: bool) -> torch.nn.Module:
         - then apply a new adapter.
 
     If `training_mode=False`:
-        - merge the most recent adapter into the base model (for export).
+        - merge the most recent adapter into the base model (for export), using CPU to avoid OOM.
     """
+    device_map = "cuda" if training_mode else "cpu"
     model = AutoModelForCausalLM.from_pretrained(
-        _BASE_MODEL_NAME, torch_dtype=torch.float16, device_map=None
+        _BASE_MODEL_NAME, torch_dtype=torch.float16, device_map=device_map
     )
 
     adapters = []
@@ -529,27 +536,34 @@ def load_base_model_with_lora(training_mode: bool) -> torch.nn.Module:
         )
 
         if not training_mode:
-            print(f"{INFO} Merging adapter for inference...")
+            print(f"{INFO} Merging adapter for inference on CPU...")
+            if not isinstance(model, PeftModel):
+                raise RuntimeError(
+                    f"Expected PeftModel, got {type(model)}. "
+                    "Check if the model is already merged."
+                )
             model = model.merge_and_unload()
+            gc.collect()
+            time.sleep(1)
+            gc.collect()
             torch.cuda.empty_cache()
+            return model
 
-        if training_mode and len(adapters) > 1 and hasattr(model, "merge_and_unload"):
+        if len(adapters) > 1 and hasattr(model, "merge_and_unload"):
             print(f"{INFO} Merging previous LoRA into model (before applying new)...")
             model = model.merge_and_unload()
             torch.cuda.empty_cache()
 
-    if training_mode:
-        print(f"{INFO} Applying new LoRA adapter for training...")
-        lora_config = LoraConfig(
-            r=8,
-            lora_alpha=32,
-            target_modules=["q_proj", "v_proj"],
-            lora_dropout=0.05,
-            bias="none",
-        )
-        model = get_peft_model(model, lora_config)
+    print(f"{INFO} Applying new LoRA adapter for training...")
+    lora_config = LoraConfig(
+        r=8,
+        lora_alpha=32,
+        target_modules=["q_proj", "v_proj"],
+        lora_dropout=0.05,
+        bias="none",
+    )
+    model = get_peft_model(model, lora_config)
 
-    model.to("cuda")
     torch.cuda.empty_cache()
     gc.collect()
     time.sleep(1)
