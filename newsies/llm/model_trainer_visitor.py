@@ -301,7 +301,7 @@ def cleanup(model, tokenizer, trainer) -> None:
             trainer.eval_dataset = None
             trainer.data_collator = None
             trainer.args = None
-            trainer.tokenizer = None
+            trainer.processing_class = None
             del trainer
         except Exception as e:
             print(f"{CLEAN}{WARN} Error deleting trainer: {e}")
@@ -313,7 +313,7 @@ def cleanup(model, tokenizer, trainer) -> None:
         torch.cuda.empty_cache()
         torch.cuda.ipc_collect()
 
-    print("{CLEAN}{OK} Cleanup complete.")
+    print(f"{CLEAN}{OK} Cleanup complete.")
 
 
 def maybe_merge_adapters(merge_threshold: int = 5) -> None:
@@ -537,7 +537,7 @@ def load_base_model_with_lora(training_mode: bool = True) -> torch.nn.Module:
         )
 
         if not training_mode:
-            print(f"{INFO} Merging adapter for inference on CPU...")
+            print(f"{PACKAGE}{INFO} Merging adapter for inference on CPU...")
             if not isinstance(model, PeftModel):
                 raise RuntimeError(
                     f"Expected PeftModel, got {type(model)}. "
