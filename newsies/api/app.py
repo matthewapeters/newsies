@@ -8,6 +8,7 @@ import gc
 import uuid
 from datetime import datetime
 import threading
+from typing import Callable
 from pydantic import BaseModel
 
 
@@ -60,10 +61,11 @@ def run_get_articles(*args, **kwargs):
             parent_task_id = kwargs["parent_task_id"]
             if parent_task_id and parent_task_id in TASK_STATUS:
                 TASK_STATUS[parent_task_id] = "running get_articles_pipeline"
-        get_articles_pipeline(*args, **kwargs)
+        get_articles_pipeline(task_id=kwargs["task_id"])
         gc.collect()
     except Exception as e:
         if "parent_task_id" in kwargs:
+            TASK_STATUS[kwargs["parent_task_id"]] = f"exception: {e}"
             parent_task_id = kwargs["parent_task_id"]
             if parent_task_id and parent_task_id in TASK_STATUS:
                 TASK_STATUS[parent_task_id] = "get_articles_pipeline failed"
@@ -90,6 +92,7 @@ def run_analyze(task_id: str, archive: str = None, parent_task_id: str = None):
         gc.collect()
     except Exception as e:
         if parent_task_id and parent_task_id in TASK_STATUS:
+            TASK_STATUS[parent_task_id] = f"exception: {e}"
             TASK_STATUS[parent_task_id] = "analyze_pipeline failed"
         else:
             print(f"analyze_pipeline failed: {e}")
@@ -99,7 +102,7 @@ def run_analyze(task_id: str, archive: str = None, parent_task_id: str = None):
 
 def run_train_model(task_id, parent_task_id: str = None):
     """
-    run_train_model
+    run_train_llm
     """
     from newsies.pipelines.train_model import train_model_pipeline
 
@@ -115,11 +118,35 @@ def run_train_model(task_id, parent_task_id: str = None):
         TASK_STATUS[task_id]["status"] = "complete"
     except Exception as e:
         if parent_task_id and parent_task_id in TASK_STATUS:
+            TASK_STATUS[parent_task_id] = f"exception: {e}"
             TASK_STATUS[parent_task_id] = "failed"
         else:
             print(f"train_model_pipeline failed: {e}")
     finally:
         RUN_LOCK.release()
+
+
+def queue_task(
+    task_name: str,
+    username: str,
+    sess: str,
+    task: Callable,
+    background_tasks: BackgroundTasks,
+    **kwargs,
+) -> str:
+    """
+    queue_task
+    """
+    task_id = str(uuid.uuid4())
+    TASK_STATUS[task_id] = {
+        "session_id": sess,
+        "status": "queued",
+        "task": task_name,
+        "username": username,
+    }
+    background_tasks.add_task(task, task_id=task_id, **kwargs)
+
+    return task_id
 
 
 @router_v1.get("/run/daily-pipeline")
@@ -134,20 +161,52 @@ async def run_daily_pipeline(request: Request, background_tasks: BackgroundTasks
     to the search engine
     * the pipeline trains the model
     """
-    task_id = str(uuid.uuid4())
+    parent_task_id = str(uuid.uuid4())
     username = request.cookies[USER_COOKIE_NAME]
     sess = request.cookies[SESSION_COOKIE_NAME]
-    TASK_STATUS[task_id] = {
+
+    get_news_task_id = queue_task(
+        "get-news",
+        username,
+        sess,
+        run_get_articles,
+        background_tasks,
+        parent_task_id=parent_task_id,
+    )
+
+    analyze_task_id = queue_task(
+        "analyze",
+        username,
+        sess,
+        run_analyze,
+        background_tasks,
+        archive=datetime.now().strftime(r"%Y-%m-%d"),
+        parent_task_id=parent_task_id,
+    )
+
+    train_task_id = queue_task(
+        "train-llm",
+        username,
+        sess,
+        run_train_model,
+        background_tasks,
+        parent_task_id=parent_task_id,
+    )
+
+    status = {
         "session_id": sess,
         "status": "queued",
         "task": "daily-pipeline",
         "username": username,
+        "tasks": {
+            "get_news": get_news_task_id,
+            "analyze": analyze_task_id,
+            "train": train_task_id,
+        },
     }
-    await run_get_news_pipeline(request, background_tasks, task_id)
-    await run_analyze_pipeline_today(request, background_tasks, task_id)
-    await run_train_llm(request, background_tasks, task_id)
 
-    return {"message": "Processed Daily Pipeline", "task_id": task_id}
+    TASK_STATUS[parent_task_id] = status
+    return status
 
 
 @router_v1.get("/run/get-news")
@@ -163,16 +222,16 @@ async def run_get_news_pipeline(
     the pipeline checks the Associated Press website for any articles in each of its sections.
     Articles are then downloaded to local cache and embedded in search engine
     """
-    task_id = str(uuid.uuid4())
     username = request.cookies[USER_COOKIE_NAME]
     sess = request.cookies[SESSION_COOKIE_NAME]
-    TASK_STATUS[task_id] = {
-        "session_id": sess,
-        "status": "queued",
-        "task": "get-news",
-        "username": username,
-    }
-    background_tasks.add_task(run_get_articles, task_id, parent_task_id=parent_task_id)
+    task_id = queue_task(
+        "get-news",
+        username,
+        sess,
+        run_get_articles,
+        background_tasks,
+        parent_task_id=parent_task_id,
+    )
     return {"message": "getting latest news from Associated Press", "task_id": task_id}
 
 
@@ -182,9 +241,22 @@ async def run_analyze_pipeline_today(
     request: Request, background_tasks: BackgroundTasks, parent_task_id: str = None
 ):
     """run_analyze_pipeline_today"""
-    return await run_analyze_pipeline(
-        request, background_tasks, datetime.now().strftime(r"%Y-%m-%d"), parent_task_id
+    username = request.cookies[USER_COOKIE_NAME]
+    sess = request.cookies[SESSION_COOKIE_NAME]
+
+    task_id = queue_task(
+        "analyze",
+        username,
+        sess,
+        run_analyze,
+        background_tasks,
+        archive=datetime.now().strftime(r"%Y-%m-%d"),
+        parent_task_id=parent_task_id,
     )
+    return {
+        "message": "analyzing latest news from Associated Press",
+        "task_id": task_id,
+    }
 
 
 @router_v1.get("/run/analyze/{archive}")
@@ -201,19 +273,17 @@ async def run_analyze_pipeline(
     The pipeline summarizes all stories, searches and adds named enttities and n-grams
     to the search engine
     """
-    task_id = str(uuid.uuid4())
     username = request.cookies[USER_COOKIE_NAME]
     sess = request.cookies[SESSION_COOKIE_NAME]
-    if archive is None:
-        archive = datetime.now().strftime(r"%Y-%m-%d")
-    TASK_STATUS[task_id] = {
-        "archive": archive,
-        "session_id": sess,
-        "status": "queued",
-        "task": "analyze",
-        "username": username,
-    }
-    background_tasks.add_task(run_analyze, task_id, archive)
+    task_id = queue_task(
+        "analyze",
+        username,
+        sess,
+        run_analyze,
+        background_tasks,
+        archive=archive or datetime.now().strftime(r"%Y-%m-%d"),
+        parent_task_id=parent_task_id,
+    )
     return {
         "message": "analyzing latest news from Associated Press",
         "task_id": task_id,
@@ -230,16 +300,17 @@ async def run_train_llm(
     Train the model in the background
     Will work backwards through the training data
     """
-    task_id = str(uuid.uuid4())
     username = request.cookies[USER_COOKIE_NAME]
     sess = request.cookies[SESSION_COOKIE_NAME]
-    TASK_STATUS[task_id] = {
-        "session_id": sess,
-        "status": "queued",
-        "task": "train-llm",
-        "username": username,
-    }
-    background_tasks.add_task(run_train_model, task_id, parent_task_id=parent_task_id)
+
+    task_id = queue_task(
+        "train-llm",
+        username,
+        sess,
+        run_train_model,
+        background_tasks,
+        parent_task_id=parent_task_id,
+    )
     return {"message": "training the LLM on latest news data", "task_id": task_id}
 
 
