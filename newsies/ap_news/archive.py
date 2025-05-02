@@ -472,7 +472,12 @@ def get_nearest_neighbors(
         or not article_data["embeddings"].any()
     ):
         print(f"Warning: No embedding found for article_id {article_id}")
-        return []
+        if len(article_id) == 32:
+            with open(
+                f"{ARCHIVE_PATH}/missing_embeddings.txt", "a", encoding="utf8"
+            ) as missing_file:
+                missing_file.write(f"{article_id}\n")
+            return []
 
     embeddings = article_data["embeddings"][0]  # Extract stored embedding
     metadatas = article_data["metadatas"][0]
@@ -507,7 +512,7 @@ def build_similarity_graph(
     for node in network:
         article_id = list(node.keys())[0]
         # Check if article_id is valid
-        if article_id == "None" or article_id == "":
+        if len(article_id) != 32:
             continue
         details = node[article_id]
         grph.add_node(article_id)  # Add article as a node
