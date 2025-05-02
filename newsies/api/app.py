@@ -56,13 +56,24 @@ def run_get_articles(*args, **kwargs):
 
     RUN_LOCK.acquire()
     try:
+        if "parent_task_id" in kwargs:
+            parent_task_id = kwargs["parent_task_id"]
+            if parent_task_id and parent_task_id in TASK_STATUS:
+                TASK_STATUS[parent_task_id] = "running get_articles_pipeline"
         get_articles_pipeline(*args, **kwargs)
         gc.collect()
+    except Exception as e:
+        if "parent_task_id" in kwargs:
+            parent_task_id = kwargs["parent_task_id"]
+            if parent_task_id and parent_task_id in TASK_STATUS:
+                TASK_STATUS[parent_task_id] = "get_articles_pipeline failed"
+        else:
+            print(f"get_articles_pipeline failed: {e}")
     finally:
         RUN_LOCK.release()
 
 
-def run_analyze(task_id: str, archive: str = None):
+def run_analyze(task_id: str, archive: str = None, parent_task_id: str = None):
     """
     run_analyze
     """
@@ -70,14 +81,23 @@ def run_analyze(task_id: str, archive: str = None):
 
     RUN_LOCK.acquire()
     try:
+        if parent_task_id and parent_task_id in TASK_STATUS:
+            last_status: str = TASK_STATUS[parent_task_id]["status"]
+            if last_status.endswith("failed"):
+                return
+            TASK_STATUS[parent_task_id] = "running analyze_pipeline"
         analyze_pipeline(task_id, archive)
         gc.collect()
-
+    except Exception as e:
+        if parent_task_id and parent_task_id in TASK_STATUS:
+            TASK_STATUS[parent_task_id] = "analyze_pipeline failed"
+        else:
+            print(f"analyze_pipeline failed: {e}")
     finally:
         RUN_LOCK.release()
 
 
-def run_train_model(task_id):
+def run_train_model(task_id, parent_task_id: str = None):
     """
     run_train_model
     """
@@ -85,8 +105,19 @@ def run_train_model(task_id):
 
     RUN_LOCK.acquire()
     try:
+        if parent_task_id and parent_task_id in TASK_STATUS:
+            last_status: str = TASK_STATUS[parent_task_id]["status"]
+            if last_status.endswith("failed"):
+                return
+            TASK_STATUS[parent_task_id] = "running train_model_pipeline"
         train_model_pipeline(task_id)
         gc.collect()
+        TASK_STATUS[task_id]["status"] = "complete"
+    except Exception as e:
+        if parent_task_id and parent_task_id in TASK_STATUS:
+            TASK_STATUS[parent_task_id] = "failed"
+        else:
+            print(f"train_model_pipeline failed: {e}")
     finally:
         RUN_LOCK.release()
 
@@ -112,11 +143,9 @@ async def run_daily_pipeline(request: Request, background_tasks: BackgroundTasks
         "task": "daily-pipeline",
         "username": username,
     }
-    await run_get_news_pipeline(request, background_tasks)
-    await run_analyze_pipeline_today(request, background_tasks)
-    await run_train_llm(request, background_tasks)
-
-    TASK_STATUS[task_id] = "complete"
+    await run_get_news_pipeline(request, background_tasks, task_id)
+    await run_analyze_pipeline_today(request, background_tasks, task_id)
+    await run_train_llm(request, background_tasks, task_id)
 
     return {"message": "Processed Daily Pipeline", "task_id": task_id}
 
@@ -126,6 +155,7 @@ async def run_daily_pipeline(request: Request, background_tasks: BackgroundTasks
 async def run_get_news_pipeline(
     request: Request,
     background_tasks: BackgroundTasks,
+    parent_task_id: str = None,
 ):
     """
     run_get_news_pipeline
@@ -142,18 +172,18 @@ async def run_get_news_pipeline(
         "task": "get-news",
         "username": username,
     }
-    background_tasks.add_task(run_get_articles, task_id)
+    background_tasks.add_task(run_get_articles, task_id, parent_task_id=parent_task_id)
     return {"message": "getting latest news from Associated Press", "task_id": task_id}
 
 
 @router_v1.get("/run/analyze")
 @require_session
 async def run_analyze_pipeline_today(
-    request: Request, background_tasks: BackgroundTasks
+    request: Request, background_tasks: BackgroundTasks, parent_task_id: str = None
 ):
     """run_analyze_pipeline_today"""
     return await run_analyze_pipeline(
-        request, background_tasks, datetime.now().strftime(r"%Y-%m-%d")
+        request, background_tasks, datetime.now().strftime(r"%Y-%m-%d"), parent_task_id
     )
 
 
@@ -163,6 +193,7 @@ async def run_analyze_pipeline(
     request: Request,
     background_tasks: BackgroundTasks,
     archive: str = Path(..., regex=r"\d{4}-\d{2}-\d{2}"),  # Enforces YYYY-MM-DD format
+    parent_task_id: str = None,
 ):
     """
     run_analyze_pipeline
@@ -191,7 +222,9 @@ async def run_analyze_pipeline(
 
 @router_v1.get("/run/train-llm")
 @require_session
-async def run_train_llm(request: Request, background_tasks: BackgroundTasks):
+async def run_train_llm(
+    request: Request, background_tasks: BackgroundTasks, parent_task_id: str = None
+):
     """
     run_train_llm
     Train the model in the background
@@ -206,7 +239,7 @@ async def run_train_llm(request: Request, background_tasks: BackgroundTasks):
         "task": "train-llm",
         "username": username,
     }
-    background_tasks.add_task(run_train_model, task_id)
+    background_tasks.add_task(run_train_model, task_id, parent_task_id=parent_task_id)
     return {"message": "training the LLM on latest news data", "task_id": task_id}
 
 

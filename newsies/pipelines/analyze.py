@@ -29,3 +29,4 @@ def analyze_pipeline(task_id: str, archive: str = None):
         TASK_STATUS[task_id] = "complete"
     except Exception as e:
         TASK_STATUS[task_id] = f"error: {e}"
+        raise e

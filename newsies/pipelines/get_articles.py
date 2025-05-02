@@ -53,3 +53,4 @@ def get_articles_pipeline(task_id: str):
         TASK_STATUS[task_id] = "complete"
     except Exception as e:
         TASK_STATUS[task_id] = f"error: {e}"
+        raise e

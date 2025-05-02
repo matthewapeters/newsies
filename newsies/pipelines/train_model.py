@@ -60,7 +60,6 @@ def train_model_pipeline(task_id: str):
 
         # Train the model
         TASK_STATUS[task_id] = "running - step: training model"
-        download_mistral()
         v = ModelTrainer()
         # setting these allows status update as we iterate through the batches
         # if either is not set, the status will not update
@@ -73,6 +72,7 @@ def train_model_pipeline(task_id: str):
     except Exception as e:
         TASK_STATUS[task_id] = f"error: {e}"
         print(f"Error: {e}")
+        raise e
     finally:
         # Clean up any temporary files or directories created during the training process
         temp_dir = "./train_test"
