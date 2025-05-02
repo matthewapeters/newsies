@@ -7,6 +7,7 @@ from typing import Dict, List
 import gc
 import os
 import time
+import shutil
 
 from datasets import Dataset
 from peft import LoraConfig, get_peft_model, PeftModel, PeftConfig
@@ -343,8 +344,16 @@ def maybe_merge_adapters(merge_threshold: int = 5) -> None:
     log_gpu_memory("after loading model (training_mode=False)")
 
     # Step 2: Save the merged model
-    merged_dir = f"merged_models/merged_model_{datetime.now().strftime(r'%Y%m%d%H%M')}"
+    merged_base = "merged_models"
+    merged_dir = f"{merged_base}/merged_model_{datetime.now().strftime(r'%Y%m%d%H%M')}"
     os.makedirs(merged_dir, exist_ok=True)
+
+    # Remove old merged models:
+    for old_path in os.listdir(merged_base):
+        if old_path.startswith("merged_model_"):
+            shutil.rmtree(os.path.join(merged_base, old_path))
+
+    # Save the merged model
     model.save_pretrained(merged_dir)
 
     # Step 3: Save the path of the latest merged model

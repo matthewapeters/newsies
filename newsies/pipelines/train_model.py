@@ -15,7 +15,6 @@ from newsies.llm import (
     QuestionGenerator,
     DatasetFormatter,
     ModelTrainer,
-    download_mistral,
 )
 
 

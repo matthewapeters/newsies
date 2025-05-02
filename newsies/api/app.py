@@ -20,7 +20,6 @@ import uvicorn
 from newsies.session import Session, get_session_params
 from newsies.session.init_session import init_session
 from newsies.pipelines import TASK_STATUS
-from newsies.ap_news.sections import SECTIONS
 from newsies.ap_news.archive import get_archive, Archive
 
 
@@ -90,6 +89,36 @@ def run_train_model(task_id):
         gc.collect()
     finally:
         RUN_LOCK.release()
+
+
+@router_v1.get("/run/daily-pipeline")
+@require_session
+async def run_daily_pipeline(request: Request, background_tasks: BackgroundTasks):
+    """
+    run_daily_pipeline
+    run the daily pipeline
+    * the pipeline checks the Associated Press website for any articles in each of its sections.
+    Articles are then downloaded to local cache and embedded in search engine
+    * the pipeline summarizes all stories, searches and adds named enttities and n-grams
+    to the search engine
+    * the pipeline trains the model
+    """
+    task_id = str(uuid.uuid4())
+    username = request.cookies[USER_COOKIE_NAME]
+    sess = request.cookies[SESSION_COOKIE_NAME]
+    TASK_STATUS[task_id] = {
+        "session_id": sess,
+        "status": "queued",
+        "task": "daily-pipeline",
+        "username": username,
+    }
+    await run_get_news_pipeline(request, background_tasks)
+    await run_analyze_pipeline_today(request, background_tasks)
+    await run_train_llm(request, background_tasks)
+
+    TASK_STATUS[task_id] = "complete"
+
+    return {"message": "Processed Daily Pipeline", "task_id": task_id}
 
 
 @router_v1.get("/run/get-news")
@@ -203,39 +232,6 @@ async def list_tasks(request: Request):
     provides the current set of admin tasks and their status
     """
     return {"newsies_tasks": TASK_STATUS.sorted(), "as_of": datetime.now().isoformat()}
-
-
-@router_v1.get("/sections")
-@require_session
-async def list_sections(request: Request):
-    """
-    list_sections
-    provides a list of sections from the Associated Press website
-    """
-    return {"news_sections": SECTIONS}
-
-
-# @router_v1.get("/headlines/{section}")
-# @require_session
-# async def list_headlines(
-#     request: Request,
-#     section: str,
-# ):
-#     """
-#     list_headlines
-#     returns headlines from the requested section
-#     """
-#     sessid = request.cookies[SESSION_COOKIE_NAME]
-#     session: Session = Session(**get_session_params(sessid))
-#     qa = {
-#         "context": "NEW",
-#         "target": HEADLINE,
-#         "section": section,
-#         "quantity": "ALL",
-#     }
-#     output = session.query(query_analysis=qa)
-#     cache_session(session)
-#     return output
 
 
 @app.get("/")
