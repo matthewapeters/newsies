@@ -232,7 +232,11 @@ class Archive:
         cdb = ChromaDBClient()
         cdb.collection_name = NEWS
         keys = self.collection.keys()
-        network = [{k: get_nearest_neighbors(cdb.collection, k, 5)} for k in keys]
+        network = [
+            {k: get_nearest_neighbors(cdb.collection, k, 5)}
+            for k in keys
+            if len(k) == 32
+        ]
 
         self.graph, partitions = build_similarity_graph(network=network)
 
