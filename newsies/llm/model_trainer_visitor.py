@@ -111,7 +111,7 @@ class ModelTrainer(Visitor):
                     log_gpu_memory("After training")
                     save_lora_adapter(pub_date, model)
                     log_gpu_memory("After saving LoRA")
-                    maybe_merge_adapters(merge_threshold=5)
+                    maybe_merge_adapters(pub_date, merge_threshold=5)
                     log_gpu_memory("After Maybe Merge")
                     cleanup(
                         model,
@@ -317,7 +317,7 @@ def cleanup(model, tokenizer, trainer) -> None:
     print(f"{CLEAN}{OK} Cleanup complete.")
 
 
-def maybe_merge_adapters(merge_threshold: int = 5) -> None:
+def maybe_merge_adapters(pub_date: int, merge_threshold: int = 5) -> None:
     """
     maybe_merge_adapters
         Checks how many progressive LoRA adapters have been trained.
@@ -345,7 +345,7 @@ def maybe_merge_adapters(merge_threshold: int = 5) -> None:
 
     # Step 2: Save the merged model
     merged_base = "merged_models"
-    merged_dir = f"{merged_base}/merged_model_{datetime.now().strftime(r'%Y%m%d%H%M')}"
+    merged_dir = f"{merged_base}/merged_model_{pub_date}_{datetime.now().strftime(r'%Y%m%d%H%M')}"
     os.makedirs(merged_dir, exist_ok=True)
 
     # Remove old merged models:
