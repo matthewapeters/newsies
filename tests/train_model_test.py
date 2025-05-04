@@ -4,10 +4,11 @@ tests.train_model_test
 
 import os
 from typing import Dict
+from shutil import rmtree
 
-import pandas as pd
-import datasets
 from datasets import Dataset
+import datasets
+import pandas as pd
 
 from newsies.ap_news.archive import Archive, get_archive
 
@@ -137,6 +138,27 @@ def test__build_batches():
     # setting these allows status update as we iterate through the batches
     # if either is not set, the status will not update
     v.visit(batch_set)
+
+
+def test__dataset_formatter():
+    """
+    test__dataset_formatter
+    """
+    base_dir = "./train_test"
+
+    batches = get_archive().build_batches()
+    batch_set = BatchSet(batches)
+
+    # Split each publish date into train, test, token_train, and token_test
+    # datasets.  These are saved to disk as parquet files.
+    # The files are named with the publish date and the type of dataset.
+    v = DatasetFormatter()
+    v.visit(batch_set)
+    assert os.path.exists(base_dir), f"expected {base_dir} to exist"
+
+    pub_date_folders = os.listdir(base_dir)
+    pub_dates = list(batches.keys())
+    assert len(pub_date_folders) == len(pub_dates)
 
 
 def test__trainer_visitor():

@@ -3,7 +3,6 @@ newsies.pipelines.train_model
 """
 
 from uuid import uuid4
-import os
 
 # from typing import Dict, Tuple
 from newsies.ap_news.archive import Archive, get_archive
@@ -73,18 +72,6 @@ def train_model_pipeline(task_id: str):
         TASK_STATUS[task_id] = f"error: {e}"
         print(f"Error: {e}")
         raise e
-    finally:
-        # Clean up any temporary files or directories created during the training process
-        temp_dir = "./train_test"
-        if os.path.exists(temp_dir):
-            for root, dirs, files in os.walk(temp_dir, topdown=False):
-                for name in files:
-                    os.remove(os.path.join(root, name))
-                for name in dirs:
-                    os.rmdir(os.path.join(root, name))
-            os.rmdir(temp_dir)
-        print("Temporary files cleaned up.")
-        print("Training pipeline completed.")
 
 
 def main():

@@ -28,24 +28,20 @@ TTRAIN = "token_train"
 TTEST = "token_test"
 TRAIN_DATA_TYPES = [TRAIN, TEST, TTRAIN, TTEST]
 
+BASE_DIR = "./train_test"
 
-def load_qa_from_parquet(file_path: str = None, batchset_index: int = None):
-    """load_qa_from_parquet"""
-    if batchset_index is not None:
-        file_path = f"./training_data/{batchset_index:04d}"
-    df = pd.read_parquet(file_path)
-    return df.to_dict(orient="records")
-
-
-def load_training_data(batchset_index: int) -> pd.DataFrame:
-    """
-    load_training_data
-    """
-    project_root = os.path.abspath(".")
-    if isinstance(batchset_index, str):
-        batchset_index = int(batchset_index)
-    df = pd.read_parquet(project_root + f"/training_data/{batchset_index:04d}")
-    return df
+BOOKS = "📚"
+CLEAN = "🧹"
+DISK = "💾"
+FAIL = "❌"
+INFO = "ℹ️"
+NEWSIES = "📰"
+OK = "✅"
+PACKAGE = "📦"
+SEARCH = "🔍"
+TRAINING = "🧠"
+WAIT = "⏳"
+WARN = "⚠️"
 
 
 class DatasetFormatter(Visitor):
@@ -74,7 +70,9 @@ class DatasetFormatter(Visitor):
             "mistral_models", DatasetFormatter.model_version
         )
         if mistral_models_path.exists():
-            print(f"mistral models already downloaded to {mistral_models_path}")
+            print(
+                f"{PACKAGE}{INFO} mistral models already downloaded to {mistral_models_path}"
+            )
             return
         mistral_models_path.mkdir(parents=True, exist_ok=True)
         #
@@ -87,6 +85,7 @@ class DatasetFormatter(Visitor):
             ],
             local_dir=mistral_models_path,
         )
+        print(f"{PACKAGE}{OK} downloaded mistral models to {mistral_models_path}")
 
     def visit_batch_set(self, batch_set: BatchSet):
         """visit_batch_set"""
@@ -94,11 +93,16 @@ class DatasetFormatter(Visitor):
         DatasetFormatter.download_mistral()
         pub_date: int
 
+        if not os.path.exists(BASE_DIR):
+            os.makedirs(BASE_DIR, exist_ok=True)
+
         for pub_date in batch_set.batches.keys():
             # Split to train and test
             if pub_date in self.history:
+                print(f"{BOOKS}{INFO} Already split {pub_date}")
                 self.update_status(f"Already split {pub_date}")
                 continue
+            print(f"{BOOKS}{INFO} Splitting {pub_date}")
             self.update_status(f"Splitting {pub_date}")
             start = datetime.now()
             try:
@@ -106,13 +110,16 @@ class DatasetFormatter(Visitor):
                 self.split_train_and_test_data(pub_date)
                 end = datetime.now()
                 elapsed = end - start
+                print(f"{BOOKS}{OK} {pub_date} took {elapsed}")
                 self.update_status(f"{pub_date} took {elapsed}")
             except Exception as e:
                 end = datetime.now()
                 elapsed = end - start
+                print(f"{BOOKS}{FAIL} {pub_date} failed: {e}")
                 self.update_status(f"{pub_date} failed after {elapsed}: {e}")
 
             self.dump_history()
+            print(f"{BOOKS}{OK} DatasetFormatter complete")
 
     def format_dataset(self, qa_dataset: pd.DataFrame) -> Dict[str, Dataset]:
         """
@@ -197,8 +204,40 @@ class DatasetFormatter(Visitor):
         split_dataset = self.format_dataset(train_df)
 
         datehourminute = datetime.now().strftime(r"%Y%m%d%H%M")
-        basedir = f"./train_test/{pub_date}/{datehourminute}"
+        basedir = f"./{BASE_DIR}/{pub_date}/{datehourminute}"
 
         for d in TRAIN_DATA_TYPES:
-            os.makedirs(f"{basedir}/{d}", exist_ok=True)
-            split_dataset[d].to_parquet(f"{basedir}/{d}/data.parquet", batch_size=1000)
+            path = f"{basedir}/{d}"
+            os.makedirs(f"{path}", exist_ok=True)
+            try:
+                print(f"{BOOKS}{INFO} Saving {path}")
+                split_dataset[d].to_parquet(f"{path}/data.parquet", batch_size=1000)
+                print(f"{BOOKS}{OK} Saved {path}/data.parquet")
+            except Exception as e:
+                print(f"{BOOKS}{FAIL} Failed to save {path}: {e}")
+                raise e
+
+
+def load_qa_from_parquet(file_path: str = None, batchset_index: int = None):
+    """load_qa_from_parquet"""
+    if batchset_index is not None:
+        file_path = f"./training_data/{batchset_index:04d}"
+    df = pd.read_parquet(file_path)
+    return df.to_dict(orient="records")
+
+
+def load_training_data(batchset_index: int) -> pd.DataFrame:
+    """
+    load_training_data
+    """
+    project_root = os.path.abspath(".")
+    if isinstance(batchset_index, str):
+        batchset_index = int(batchset_index)
+    try:
+        df = pd.read_parquet(project_root + f"/training_data/{batchset_index:04d}")
+        return df
+    except FileNotFoundError as e:
+        print(
+            f"{BOOKS}{FAIL} File not found: {project_root}/training_data/{batchset_index:04d}: {e}"
+        )
+        raise e

@@ -483,6 +483,15 @@ def get_latest_training_data(
         base_dir = f"./{base_dir}/{pub_date:04d}"
     else:
         base_dir = f"./{base_dir}/{pub_date}"
+    if not os.path.exists(base_dir):
+        with open("missing_training_data.txt", "a", encoding="utf8") as fh:
+            fh.write(f"{base_dir}\n")
+        msg = (
+            f"️{BOOKS}{FAIL} No training data found for {base_dir}. "
+            "Please run get_train_and_test_data() first."
+        )
+        print(msg)
+        raise OSError(msg)
     dirs = os.listdir(base_dir)
     if len(dirs) == 0:
         raise OSError("️No test data found. Please run get_train_and_test_data() first.")
