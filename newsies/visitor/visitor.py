@@ -31,6 +31,8 @@ class Visitor(ABC):
                 self.history = {}
                 self.dump_history()
         else:
+            if not os.path.exists(os.path.dirname(self._history_path)):
+                os.makedirs(os.path.dirname(self._history_path), exist_ok=True)
             self.history = {}
             self.dump_history()
 

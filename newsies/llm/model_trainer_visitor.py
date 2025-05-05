@@ -257,9 +257,9 @@ def train_model(trainer) -> tuple[str, pd.DataFrame]:
     try:
         trainer.train()
         torch.cuda.synchronize()
-        print(f"{TRAIN}{OK} Training complete.")
+        print(f"{TRAINING}{OK} Training complete.")
     except Exception as e:
-        print(f"️{TRAIN}{WARN} Training failed: {e}")
+        print(f"️{TRAINING}{WARN} Training failed: {e}")
         raise
 
 

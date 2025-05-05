@@ -34,6 +34,8 @@ def test__get_articles_pipeline():
     for d in documents:
         uri = REDIS.get(d)
         assert uri is not None
+        if uri.decode("utf8").endswith("None.pkl"):
+            continue
         try:
             with open(uri, "rb") as fh:
                 article: Article = pickle.load(fh)

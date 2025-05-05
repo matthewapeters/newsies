@@ -26,8 +26,14 @@ def detect_named_entities(
     detect_named_entities
     """
     uri = REDIS.get(story_url)
-    with open(uri, "rb") as fh:
-        article: Article = pickle.load(fh)
+    try:
+        with open(uri, "rb") as fh:
+            article: Article = pickle.load(fh)
+    except FileNotFoundError:
+        print(f"File not found: {uri} {story_url}")
+        with open("missing_stories.txt", "a", encoding="utf8") as fh:
+            fh.write(f"{story_url}\n")
+        return
 
     v = NamedEntityVisistor()
     v.visit(article)
