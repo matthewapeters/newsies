@@ -3,7 +3,8 @@ newsies.pipelines.task_status
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
+
 import threading
 from typing import List, Dict, Union
 
@@ -61,13 +62,19 @@ class AppStatus(dict):
 
         super().__setitem__(key, value)  # store the status record
 
-    def sorted(self) -> List[Dict]:
+    def sorted(self, complete_retention: timedelta = timedelta(hours=12)) -> List[Dict]:
         """
         sort
         render the status in descending order of timestamp
         """
         if len(self) == 0:
             return []
+        threshold = datetime.now() - complete_retention
+        for k, v in self.items():
+            if v["status"].startswith("error") or v["status"] in ("complete", "failed"):
+                # remove tasks older than complete_retention
+                if datetime.fromisoformat(v["timestamp"]) <= threshold:
+                    del self[k]
         tasks = [{k: v} for k, v in self.items()]
         tasks.sort(key=lambda t: list(t.values())[0]["timestamp"], reverse=True)
         return tasks
