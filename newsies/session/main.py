@@ -8,6 +8,7 @@ import uuid
 
 from newsies.session.turn import Turn
 from newsies.redis_client import REDIS
+from newsies.llm import load_latest_model_with_lora
 
 # pylint: disable=broad-exception-caught, protected-access, unnecessary-lambda, too-many-instance-attributes, invalid-name
 
@@ -41,6 +42,7 @@ class Session:
         self._context: Dict = kwargs.get("context", {})
         self._username: str = kwargs.get("username")
         self._collection: str = kwargs.get("collection")
+        self._model = load_latest_model_with_lora(False)
 
     def toJson(self):
         """

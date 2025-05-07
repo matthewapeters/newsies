@@ -118,9 +118,6 @@ if __name__ == "__main__":
             case "cli":
                 from newsies.cli import cli_read_news
 
-                date_archive: str = None
-                if len(sys.argv) > 3:
-                    date_archive = sys.argv[2]
-                cli_read_news(date_archive)
+                cli_read_news()
             case _:
                 usage()

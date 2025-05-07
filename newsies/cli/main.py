@@ -48,14 +48,14 @@ def select_collection(
     return (None, chromadb_client)
 
 
-def cli_read_news(archive_date: str = None):
+def cli_read_news():
     """
     read_news:
       - read news from the database
     """
     session, chromadb_client = init_session(None)
-    if archive_date is None:
-        _, chromadb_client = select_collection(chromadb_client, archive_date)
+    # if archive_date is None:
+    #    _, chromadb_client = select_collection(chromadb_client, archive_date)
 
     exit_now = False
 
@@ -64,19 +64,10 @@ def cli_read_news(archive_date: str = None):
         # Test locally hosted RAG
         # query = "How does deep learning differ from machine learning and what
         # role does transformer play?"
-        query = input(
-            f"session {session.id}:\nQuery Newsies Agent "
-            f"{chromadb_client.collection.name} (cc to change collection / quit to exit):\n "
-        ).strip()
+        query = input(f"session {session.id}:\nQuery Newsies Agent\n").strip()
         match query:
             case "quit":
                 exit_now = True
-            case "cc":
-                new_session, chromadb_client = select_collection(
-                    chromadb_client, archive_date
-                )
-                if new_session:
-                    session = new_session
             case "":
                 continue
             case _:

@@ -1,0 +1,16 @@
+"""newsies.llm.specs"""
+
+_TRAINED_DATES_PATH = "./training_data/trained_dates.pkl"
+_BASE_MODEL_NAME = "mistralai/Mistral-7B-v0.3"
+BOOKS = "📚"
+CLEAN = "🧹"
+DISK = "💾"
+FAIL = "❌"
+INFO = "ℹ️"
+NEWSIES = "📰"
+OK = "✅"
+PACKAGE = "📦"
+SEARCH = "🔍"
+TRAINING = "🧠"
+WAIT = "⏳"
+WARN = "⚠️"

@@ -10,12 +10,10 @@ import time
 import shutil
 
 from datasets import Dataset
-from peft import LoraConfig, get_peft_model, PeftModel, PeftConfig
 import pandas as pd
 import torch
 from transformers import (
     AutoTokenizer,
-    AutoModelForCausalLM,
     DataCollatorForLanguageModeling,
     TrainingArguments,
     Trainer,
@@ -26,6 +24,24 @@ from transformers.utils import logging as hfu_logging
 from newsies.llm.batch_set import BatchSet
 from newsies.visitor import Visitor
 
+from .load_latest import load_base_model_with_lora
+from .specs import (
+    _BASE_MODEL_NAME,
+    _TRAINED_DATES_PATH,
+    BOOKS,
+    CLEAN,
+    DISK,
+    FAIL,
+    INFO,
+    NEWSIES,
+    OK,
+    PACKAGE,
+    SEARCH,
+    TRAINING,
+    WAIT,
+    WARN,
+)
+
 # pylint: disable=dangerous-default-value, broad-exception-caught
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
@@ -33,27 +49,12 @@ hf_logging.set_verbosity_error()
 hfu_logging.set_verbosity_error()
 hf_logging.disable_progress_bar()
 
-_TRAINED_DATES_PATH = "./training_data/trained_dates.pkl"
-_BASE_MODEL_NAME = "mistralai/Mistral-7B-v0.3"
 
 TRAIN = "train"
 TEST = "test"
 TTRAIN = "token_train"
 TTEST = "token_test"
 _TRAIN_DATA_TYPES = [TRAIN, TEST, TTRAIN, TTEST]
-
-BOOKS = "📚"
-CLEAN = "🧹"
-DISK = "💾"
-FAIL = "❌"
-INFO = "ℹ️"
-NEWSIES = "📰"
-OK = "✅"
-PACKAGE = "📦"
-SEARCH = "🔍"
-TRAINING = "🧠"
-WAIT = "⏳"
-WARN = "⚠️"
 
 
 class ModelTrainer(Visitor):
@@ -518,80 +519,3 @@ def get_latest_training_data(
             "Please run get_train_and_test_data() first."
         ) from e
     return train_dict
-
-
-def load_base_model_with_lora(training_mode: bool = True) -> torch.nn.Module:
-    """
-    Loads the base model and applies the latest LoRA adapter (if any).
-
-    If `training_mode=True`:
-        - merge the previous adapter if it's not the first one,
-        - then apply a new adapter.
-
-    If `training_mode=False`:
-        - merge the most recent adapter into the base model (for export), using CPU to avoid OOM.
-    """
-    device_map = "cuda" if training_mode else "cpu"
-    model = AutoModelForCausalLM.from_pretrained(
-        _BASE_MODEL_NAME, torch_dtype=torch.float16, device_map=device_map
-    )
-
-    adapters = []
-    if os.path.exists("./lora_adapters.txt"):
-        with open("./lora_adapters.txt", "r", encoding="utf8") as fh:
-            adapters = [line.strip() for line in fh if line.strip()]
-
-    if adapters:
-        last_lora_path = adapters[-1]
-        peft_config = PeftConfig.from_pretrained(last_lora_path)
-
-        if (
-            peft_config.base_model_name_or_path
-            and peft_config.base_model_name_or_path != _BASE_MODEL_NAME
-        ):
-            raise RuntimeError(
-                f"Incompatible adapter. Expected base: {_BASE_MODEL_NAME}, "
-                f"got: {peft_config.base_model_name_or_path}"
-            )
-
-        print(f"{TRAINING}{SEARCH} Loading latest LoRA adapter: {last_lora_path}")
-        model = PeftModel.from_pretrained(
-            model, last_lora_path, torch_dtype=torch.float16
-        )
-
-        if not training_mode:
-            print(f"{PACKAGE}{INFO} Merging adapter for inference on CPU...")
-            if not isinstance(model, PeftModel):
-                raise RuntimeError(
-                    f"Expected PeftModel, got {type(model)}. "
-                    "Check if the model is already merged."
-                )
-            model = model.merge_and_unload()
-            gc.collect()
-            time.sleep(1)
-            gc.collect()
-            torch.cuda.empty_cache()
-            return model
-
-        if len(adapters) > 1 and hasattr(model, "merge_and_unload"):
-            print(
-                f"{PACKAGE}{INFO} Merging previous LoRA into model (before applying new)..."
-            )
-            model = model.merge_and_unload()
-            torch.cuda.empty_cache()
-
-    print(f"{TRAINING}{INFO} Applying new LoRA adapter for training...")
-    lora_config = LoraConfig(
-        r=8,
-        lora_alpha=32,
-        target_modules=["q_proj", "v_proj"],
-        lora_dropout=0.05,
-        bias="none",
-    )
-    model = get_peft_model(model, lora_config)
-
-    torch.cuda.empty_cache()
-    gc.collect()
-    time.sleep(1)
-    gc.collect()
-    return model
