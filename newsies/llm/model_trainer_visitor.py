@@ -19,7 +19,9 @@ from transformers import (
     DataCollatorForLanguageModeling,
     TrainingArguments,
     Trainer,
+    logging as hf_logging,
 )
+from transformers.utils import logging as hfu_logging
 
 from newsies.llm.batch_set import BatchSet
 from newsies.visitor import Visitor
@@ -27,6 +29,9 @@ from newsies.visitor import Visitor
 # pylint: disable=dangerous-default-value, broad-exception-caught
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+hf_logging.set_verbosity_error()
+hfu_logging.set_verbosity_error()
+hf_logging.disable_progress_bar()
 
 _TRAINED_DATES_PATH = "./training_data/trained_dates.pkl"
 _BASE_MODEL_NAME = "mistralai/Mistral-7B-v0.3"
@@ -75,91 +80,89 @@ class ModelTrainer(Visitor):
         pub_dates = list(batch_set.batches.keys())
         pub_dates.sort()
         for pub_date in pub_dates:
-            batches = batch_set.batches[pub_date]
-            for batch in batches:
-                batch_id = list(set(batch))
-                batch_id.sort()
-                batch_id = ",".join(batch_id)
+            articles: List[str] = list(
+                set(a for batch in batch_set.batches[pub_date] for a in batch)
+            )
+            articles.sort()
+            article_count = len(articles)
+            # in this context, a batch is all of the articles for a publish date
+            # we prepend the article count to the sorted list of articles to quickly
+            # identify potential changes in the publish date corpus
+            batch_id = f"{article_count}: {','.join(articles)}"
 
-                # skip any publish date that has already been trained
-                # we need a database of published dates and their batch of articles
-                # to check if the model has already been trained
-                if pub_date in self.history and batch_id in self.history[pub_date]:
-                    self.update_status(f"Skipping {pub_date} - already trained")
-                    continue
+            # skip any publish date that has already been trained
+            # we need a database of published dates and their batch of articles
+            # to check if the model has already been trained
 
-                # train the model on the batch
-                self.update_status(f"training {pub_date} ")
-                start = datetime.now()
+            # eventually, we need to add the commented out code - we might discover new articles for
+            # the same publish date, so we need to check if the batch_id is the same
+            if pub_date in self.history:  # and batch_id == self.history[pub_date]:
+                self.update_status(f"Skipping {pub_date} - already trained")
+                continue
+
+            # train the model on the batch
+            self.update_status(f"training {pub_date}")
+            start = datetime.now()
+            print(
+                f"{NEWSIES}{TRAINING} start training "
+                f"{pub_date} at {start} -- {article_count} articles"
+            )
+            try:
+                wait_for_cuda_memory(target_gb=12.0, max_wait_sec=180)
+                log_gpu_memory("Before getting trainer and model")
                 try:
-                    wait_for_cuda_memory(target_gb=12.0, max_wait_sec=180)
-                    log_gpu_memory("Before getting trainer and model")
-                    try:
-                        t_train_dataset, t_eval_dataset = get_train_and_test_data(
-                            pub_date
-                        )
-                    except OSError as e:
-                        self.update_status(
-                            f"{WARN} Error getting training data for {pub_date}: {e}"
-                        )
-                        continue
-                    trainer, model, tokenizer = get_trainer(
-                        t_train_dataset, t_eval_dataset
+                    t_train_dataset, t_eval_dataset = get_train_and_test_data(pub_date)
+                except OSError as e:
+                    self.update_status(
+                        f"{WARN} Error getting training data for {pub_date}: {e}"
                     )
-                    log_gpu_memory("After get_trainer() before train_model()")
-                    train_model(trainer)
-                    log_gpu_memory("After training")
-                    save_lora_adapter(pub_date, model)
-                    log_gpu_memory("After saving LoRA")
-                    maybe_merge_adapters(pub_date, merge_threshold=5)
-                    log_gpu_memory("After Maybe Merge")
-                    cleanup(
-                        model,
-                        tokenizer,
-                        trainer,
-                    )
-                    log_gpu_memory("After Cleanup")
-                    end = datetime.now()
-                    elapsed = end - start
-                    _msg = f"{NEWSIES}{OK} {pub_date} complete in {elapsed}"
-                    print(_msg)
-                    self.update_status(_msg)
-                    self.history[pub_date] = batch_id
-                    self.dump_history()
-                except TimeoutException as te:
-                    end = datetime.now()
-                    elapsed = end - start
-                    _msg = f"{NEWSIES}{FAIL} {pub_date} failed after {elapsed}: {te}"
-                    print(_msg)
-                    self.update_status(_msg)
-                    raise te
-                except MemoryError as me:
-                    end = datetime.now()
-                    elapsed = end - start
-                    _msg = f"{NEWSIES}{FAIL} {pub_date} failed after {elapsed}: {me}"
-                    print(_msg)
-                    self.update_status(_msg)
-                    raise me
-                except torch.OutOfMemoryError as ome:
-                    end = datetime.now()
-                    elapsed = end - start
-                    _msg = f"{NEWSIES}{FAIL} {pub_date} failed after {elapsed}: {ome}"
-                    print(_msg)
-                    self.update_status(_msg)
-                    raise ome
-                except RuntimeError as re:
-                    end = datetime.now()
-                    elapsed = end - start
-                    _msg = f"{NEWSIES}{FAIL} {pub_date} failed after {elapsed}: {re}"
-                    print(_msg)
-                    self.update_status(_msg)
-                    raise re
-                except Exception as e:
-                    end = datetime.now()
-                    elapsed = end - start
-                    _msg = f"{NEWSIES}{WARN} {pub_date} failed after {elapsed}: {e}"
-                    print(_msg)
-                    self.update_status()
+                    continue
+                trainer, model, tokenizer = get_trainer(t_train_dataset, t_eval_dataset)
+                log_gpu_memory("After get_trainer() before train_model()")
+                train_model(trainer)
+                log_gpu_memory("After training")
+                save_lora_adapter(pub_date, model)
+                log_gpu_memory("After saving LoRA")
+                maybe_merge_adapters(pub_date, merge_threshold=5)
+                log_gpu_memory("After Maybe Merge")
+                cleanup(
+                    model,
+                    tokenizer,
+                    trainer,
+                )
+                log_gpu_memory("After Cleanup")
+                end = datetime.now()
+                elapsed = end - start
+                _msg = f"{NEWSIES}{OK} {pub_date} complete in {elapsed}"
+                self.history[pub_date] = batch_id
+                self.dump_history()
+            except TimeoutException as te:
+                end = datetime.now()
+                elapsed = end - start
+                _msg = f"{NEWSIES}{FAIL} {pub_date} failed after {elapsed}: {te}"
+                raise te
+            except MemoryError as me:
+                end = datetime.now()
+                elapsed = end - start
+                _msg = f"{NEWSIES}{FAIL} {pub_date} failed after {elapsed}: {me}"
+                raise me
+            except torch.OutOfMemoryError as ome:
+                end = datetime.now()
+                elapsed = end - start
+                _msg = f"{NEWSIES}{FAIL} {pub_date} failed after {elapsed}: {ome}"
+                raise ome
+            except RuntimeError as re:
+                end = datetime.now()
+                elapsed = end - start
+                _msg = f"{NEWSIES}{FAIL} {pub_date} failed after {elapsed}: {re}"
+                raise re
+            except Exception as e:
+                end = datetime.now()
+                elapsed = end - start
+                _msg = f"{NEWSIES}{WARN} {pub_date} failed after {elapsed}: {e}"
+            finally:
+                print(_msg)
+                self.update_status(_msg)
 
 
 def get_train_and_test_data(pub_date: int) -> Dict[str, pd.DataFrame]:
@@ -221,12 +224,13 @@ def get_trainer(
         output_dir="./news_finetune_model",
         per_device_train_batch_size=selected_batch_size,
         num_train_epochs=3,
-        logging_steps=10,
+        logging_steps=10000,
         save_strategy="epoch",
         eval_strategy="epoch",
         fp16=True,
         optim="adamw_torch",
         remove_unused_columns=False,
+        disable_tqdm=True,
     )
 
     data_collator = DataCollatorForLanguageModeling(
@@ -477,6 +481,7 @@ def get_latest_training_data(
 ) -> Dict[str, pd.DataFrame]:
     """
     get_latest_train_data
+        Retrieves the most recent representation of training data for a publish date.
     """
     base_dir = "./train_test"
     if isinstance(pub_date, int):
