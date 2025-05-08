@@ -24,11 +24,16 @@ def fix_article_formats():
     visitor = ArticleFormatVisitor()
     for article_path in articles:
         article: Article = pickle.load(open(article_path, "rb"))
-        article.pipelines.pop(ArticleFormatVisitor.step_name)
-
-        visitor.visit(article)
-        article.pickle()
-        print(f"Formatted {article_path}")
+        if visitor.step_name in article.pipelines:
+            # remove the previous format pipeline entry
+            article.pipelines.pop(visitor.step_name)
+            visitor.visit(article)
+            article.pickle()
+            print(f"Fix Formatting for {article_path}")
+        else:
+            visitor.visit(article)
+            article.pickle()
+            print(f"Formatted {article_path}")
 
 
 if __name__ == "__main__":
