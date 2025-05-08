@@ -48,7 +48,7 @@ class ArticleFormatVisitor(Visitor):
             return
         section_titles = [
             (
-                f"{SECTION_START}{section}{SECTION_END}: "
+                f"{SECTION_START}{section or 'front page'}{SECTION_END}: "
                 f"{TITLE_START}{headline}{TITLE_END}"
             )
             for section, headline in article.section_headlines.items()
