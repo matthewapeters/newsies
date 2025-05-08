@@ -13,6 +13,7 @@ from newsies.ap_news.article_embeddings import article_embeddings
 # from newsies.ap_news.article_summary import article_summary
 from newsies.ap_news.article_loader import article_loader
 from newsies.ap_news.article_indexer import article_indexer
+from newsies.ap_news.article_formatter import article_formatter
 
 from .task_status import TASK_STATUS
 
@@ -37,10 +38,9 @@ def get_articles_pipeline(task_id: str):
         TASK_STATUS[task_id] = "running - step: detecting named entities in articles"
         article_ner(task_state=TASK_STATUS, task_id=task_id)
 
-        # summaries may not be needed until after model training
-        # print("\n\t- article summary\n")
-        # TASK_STATUS[task_id] = "running - step: generating article summaries"
-        # article_summary(task_state=TASK_STATUS, task_id=task_id)
+        print("\n\t- article formatting\n")
+        TASK_STATUS[task_id] = "running - step: formatting article for LLM"
+        article_formatter(task_state=TASK_STATUS, task_id=task_id)
 
         print("\n\t- article embeddings\n")
         TASK_STATUS[task_id] = "running - step: generating embeddings"

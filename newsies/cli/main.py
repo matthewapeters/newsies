@@ -48,18 +48,21 @@ def select_collection(
     return (None, chromadb_client)
 
 
-def cli_read_news():
+def cli_read_news(one_shot: str = None):
     """
     read_news:
       - read news from the database
     """
-    session, chromadb_client = init_session(None)
+    session = init_session()
     # if archive_date is None:
     #    _, chromadb_client = select_collection(chromadb_client, archive_date)
 
     exit_now = False
+    if one_shot:
+        resp = session.query(one_shot)
+        return f"Response: {resp}"
 
-    while exit_now is False:
+    while exit_now is False and not one_shot:
 
         # Test locally hosted RAG
         # query = "How does deep learning differ from machine learning and what
@@ -71,4 +74,5 @@ def cli_read_news():
             case "":
                 continue
             case _:
-                session.query(query)
+                resp = session.query(query)
+                print(f"Response: {resp}")

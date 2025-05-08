@@ -6,9 +6,11 @@ import json
 from typing import Dict, List, Union
 import uuid
 
+from torch.nn import Module
+
 from newsies.session.turn import Turn
 from newsies.redis_client import REDIS
-from newsies.llm import load_latest_model_with_lora
+from newsies.llm import load_base_model_with_lora, CORPUS_PROMPT, tokenize, decode
 
 # pylint: disable=broad-exception-caught, protected-access, unnecessary-lambda, too-many-instance-attributes, invalid-name
 
@@ -42,7 +44,7 @@ class Session:
         self._context: Dict = kwargs.get("context", {})
         self._username: str = kwargs.get("username")
         self._collection: str = kwargs.get("collection")
-        self._model = load_latest_model_with_lora(False)
+        self._model: Module = load_base_model_with_lora(False)
 
     def toJson(self):
         """
@@ -98,6 +100,15 @@ class Session:
     def collection(self, c: str):
         self._collection = c
 
+    @property
+    def corpus_model(self) -> Module:
+        """
+        corpus_model
+            Returns the latest fine-tuned model
+            This is used to identify articles for RAG context
+        """
+        return self._model
+
     def _clone_last_turn(self, turn: Turn):
         if len(self._history) == 0:
             return
@@ -114,3 +125,23 @@ class Session:
         cache_session
         """
         REDIS.set(self.id, self.toJson())
+
+    def query(self, q: str, **kwargs) -> Turn:
+        """
+        query
+            q: the query string
+            kwargs: additional parameters for the query
+        """
+        turn = Turn(query=f"{CORPUS_PROMPT} question: {q}", **kwargs)
+        turn.answer = decode(
+            self.corpus_model.generate(
+                tokenize(turn.query),
+                max_length=1024,
+                temperature=0.7,
+                top_p=0.95,
+                do_sample=True,
+            )
+        )
+        self.add(turn)
+        self.cache_session()
+        return turn

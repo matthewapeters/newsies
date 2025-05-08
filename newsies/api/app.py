@@ -359,7 +359,7 @@ async def login(username: str = "", redirect: str = "/"):
             status_code=403, detail="Username is required. IE: /login/<username>"
         )
 
-    session, _ = init_session(username=username)
+    session = init_session(username=username)
     session.cache_session()
     response = RedirectResponse(url=redirect)
     response.set_cookie(key=SESSION_COOKIE_NAME, value=session.id, httponly=True)

@@ -24,6 +24,7 @@ import pandas as pd
 # from newsies.ap_news.archive import get_archive, Archive
 from newsies.llm import BatchSet
 from newsies.visitor import Visitor
+from .specs import CORPUS_PROMPT
 
 # pylint: disable=broad-exception-caught
 
@@ -110,10 +111,9 @@ class QuestionGenerator(Visitor):
                 formatted_questions = [
                     [
                         (
-                            "for the next question, return the 'section', "
-                            "the 'headline', and the 'URI'\n"
+                            f"{CORPUS_PROMPT}"
                             f"context section: {batch['section']}\n"
-                            f"context uri: {batch['uri']}\n ontext headline: {batch['headline']}\n"
+                            f"context uri: {batch['uri']}\n context headline: {batch['headline']}\n"
                             f"context article: {batch['doc']}\n"
                             f"question: '{batch_questions[i+ii]}'"
                         )
@@ -127,11 +127,7 @@ class QuestionGenerator(Visitor):
                 # necessary for testing the model
                 unformatted_questions = [
                     [
-                        (
-                            "for the next question, return the 'section', "
-                            "the 'headline', and the 'URI'\n"
-                            f"question: '{batch_questions[i+ii]}'"
-                        )
+                        (f"{CORPUS_PROMPT} question: '{batch_questions[i+ii]}'")
                         for ii in range(0, self.number_of_questions)
                     ]
                     for i in range(0, len(batch_questions), self.number_of_questions)

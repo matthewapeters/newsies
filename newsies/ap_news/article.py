@@ -102,6 +102,7 @@ class Article:
         self.keywords: List[str] = self._get_keywords()
         self.open_graph: Dict[str, str] = self._get_open_graph()
         self.authors: List[str] = self._get_authors()
+        self.formatted: str = ""
 
     def _get_permutive_data(self) -> Dict[str, Any]:
         """
