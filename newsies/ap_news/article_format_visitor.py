@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from newsies.ap_news.article import Article
-from newsies.visitor.visitor import Visitor
+from newsies.visitor.visitor import BatchSetVisitor
 
 from ..llm.specs import (
     ARTICLE_END,
@@ -21,7 +21,7 @@ from ..llm.specs import (
 )
 
 
-class ArticleFormatVisitor(Visitor):
+class ArticleFormatVisitor(BatchSetVisitor):
     """Visitor to format an article for the LLM."""
 
     def __init__(

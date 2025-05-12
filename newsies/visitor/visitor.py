@@ -7,6 +7,9 @@ import os
 import pickle
 from abc import ABC, abstractmethod
 
+from newsies.ap_news.archive import Archive
+from newsies.llm.batch_set import BatchSet
+
 
 class Visitor(ABC):
     """
@@ -91,11 +94,24 @@ class Visitor(ABC):
         """
         match target:
             case self._target_class():
-                self.visit_batch_set(target)
+                self.visit_target(target)
             case _:
                 raise TypeError(
                     f"ModelTrainer only accepts {self._target_class}, got {type(target)}"
                 )
+
+    @abstractmethod
+    def visit_target(self, target: Any):
+        """visit_target"""
+        raise NotImplementedError("visit_batch_set not implemented")
+
+
+class BatchSetVisitor(Visitor):
+    """BatchSetVisitor"""
+
+    def visit_target(self, target: Any):
+        t: BatchSet = target
+        self.visit_batch_set(t)
 
     @abstractmethod
     def visit_batch_set(self, batch_set: Any):
@@ -103,3 +119,18 @@ class Visitor(ABC):
         Visit the BatchSet class and train a machine learning model.
         """
         raise NotImplementedError("visit_batch_set not implemented")
+
+
+class ArchiveVisitor(Visitor):
+    """ArchiveVisitor"""
+
+    def visit_target(self, target: Any):
+        t: Archive = target
+        self.visit_archive(t)
+
+    @abstractmethod
+    def visit_archive(self, archive: Archive):
+        """
+        visit_archive
+            Visit the Archive class instance and process articles
+        """

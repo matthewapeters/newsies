@@ -4,7 +4,9 @@ newsies.pipelines.analyze
 
 from datetime import datetime
 
-from newsies.ap_news.knn_analysis import generate_knn_graph
+from newsies.ap_news.archive import Archive, get_archive
+from newsies.llm.question_generator import QuestionGenerator
+from newsies.llm.summarize_visitor import SummarizeVisitor
 
 from .task_status import TASK_STATUS
 
@@ -23,6 +25,7 @@ def analyze_pipeline(task_id: str, archive: str = None):
     try:
 
         # get the Archive
+        archive: Archive = get_archive()
 
         # NOTE: Summaries, Questions, and Answers will be stored as both decoded
         # text and embedding in each article.  Creating the dataframes for training
@@ -30,6 +33,8 @@ def analyze_pipeline(task_id: str, archive: str = None):
 
         # Using a visitor, generate summaries for the articles in the Archive
         # Add summaries to the articles in the Archive
+        v = SummarizeVisitor()
+        v.visit(archive)
 
         # Using a visitor and Mistral-instruct LLM, generate questions and
         # answers from the article summaries in the Archive
@@ -42,9 +47,10 @@ def analyze_pipeline(task_id: str, archive: str = None):
         # for pairs of NERs in the Archive Articles.  Add questions and answers to the
         # articles in the Archive
 
-        print("\n\t- creating knn graph of stories\n")
-        TASK_STATUS[task_id] = "running - step: Creating KNN Graph"
-        generate_knn_graph()
+        # OLD STUFF TO RELOCATE / RE-EVALUATE
+        # print("\n\t- creating knn graph of stories\n")
+        # TASK_STATUS[task_id] = "running - step: Creating KNN Graph"
+        # generate_knn_graph()
 
         TASK_STATUS[task_id] = "complete"
     except Exception as e:

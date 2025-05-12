@@ -9,12 +9,12 @@ from datasets import Dataset
 import torch
 
 from newsies.llm.batch_set import BatchSet
-from newsies.visitor import Visitor
+from newsies.visitor import BatchSetVisitor
 
 # pylint: disable=broad-exception-caught
 
 
-class DataFramer(Visitor):
+class DataFramer(BatchSetVisitor):
     """
     DataFramer class is used to convert batches of data into a pandas DataFrame.
     """

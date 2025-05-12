@@ -18,7 +18,7 @@ import pandas as pd
 
 
 from newsies.llm import BatchSet
-from newsies.visitor import Visitor
+from newsies.visitor import BatchSetVisitor
 
 # pylint: disable=broad-exception-raised, broad-exception-caught
 
@@ -44,7 +44,7 @@ WAIT = "⏳"
 WARN = "⚠️"
 
 
-class DatasetFormatter(Visitor):
+class DatasetFormatter(BatchSetVisitor):
     """
     DatasetFormatter
     """

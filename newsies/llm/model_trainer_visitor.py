@@ -22,7 +22,7 @@ from transformers import (
 from transformers.utils import logging as hfu_logging
 
 from newsies.llm.batch_set import BatchSet
-from newsies.visitor import Visitor
+from newsies.visitor import BatchSetVisitor
 
 from .load_latest import load_base_model_with_lora
 from .specs import (
@@ -57,7 +57,7 @@ TTEST = "token_test"
 _TRAIN_DATA_TYPES = [TRAIN, TEST, TTRAIN, TTEST]
 
 
-class ModelTrainer(Visitor):
+class ModelTrainer(BatchSetVisitor):
     """
     ModelTrainer class is used to train a machine learning model.
     This is a Visitor class targeting the BatchSet class.
