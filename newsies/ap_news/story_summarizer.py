@@ -64,8 +64,8 @@ def read_story(uri) -> str:
     try:
         with open(uri, "r", encoding="utf8") as f:
             text = f.read()
-        # remove AP credit tags for Video or photos (and related caption), as they are not in the text
-        # remove the AP legal at the end so it does not confuse the summary
+        # remove AP credit tags for Video or photos (and related caption), as they are not
+        # in the text # remove the AP legal at the end so it does not confuse the summary
         text = re.sub(
             r".*\(AP \w*\/\w* \w*\)|The Associated Press.*$|.*AP is solely responsible.*$|\n{2,}",
             "\n",

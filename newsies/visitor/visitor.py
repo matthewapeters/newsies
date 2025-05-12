@@ -105,6 +105,11 @@ class Visitor(ABC):
         """visit_target"""
         raise NotImplementedError("visit_batch_set not implemented")
 
+    @property
+    def step_name(self) -> str:
+        """step_name"""
+        return self._step_name
+
 
 class BatchSetVisitor(Visitor):
     """BatchSetVisitor"""
