@@ -103,6 +103,7 @@ class Article:
         self.open_graph: Dict[str, str] = self._get_open_graph()
         self.authors: List[str] = self._get_authors()
         self.formatted: str = ""
+        self.summaries_questions_answers: Dict[str, Dict[str, str]] = {}
 
     def _get_permutive_data(self) -> Dict[str, Any]:
         """
@@ -216,3 +217,14 @@ class Article:
         visit
         """
         visitor.visit_article(self)
+
+    def add_summary_and_qa(self, summary: str, question: str, answer: str):
+        """
+        add_summary_and_qa
+            Article is expected to have multiple summaries, and each summary
+            is expected to generate multiple questions and answers
+        """
+        if summary not in self.summaries_questions_answers:
+            self.summaries_questions_answers[summary] = {question: answer}
+        else:
+            self.summaries_questions_answers[summary][question] = answer

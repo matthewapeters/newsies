@@ -3,7 +3,7 @@
 import gc
 import re
 from typing import List, Tuple
-
+from datetime import datetime
 from pathlib import Path
 
 import torch
@@ -11,10 +11,6 @@ from huggingface_hub import snapshot_download
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
-    DataCollatorForLanguageModeling,
-    TrainingArguments,
-    Trainer,
-    logging as hf_logging,
 )
 from newsies.visitor import ArchiveVisitor
 from newsies.ap_news.archive import Archive
@@ -33,7 +29,7 @@ def extract_summary_blocks(text, tag_str: str = "SUMMARY"):
     Extracts all content between [|SUMMARY START|] and [|SUMMARY END|] tags.
     Returns a list of matched strings.
     """
-    pattern = r"\[\|" + tag_str + " START\|\](.*?)\[\|" + tag_str + " END\|\]"
+    pattern = r"\[\|" + tag_str + r" START\|\](.*?)\[\|" + tag_str + r" END\|\]"
     matches = re.findall(pattern, text, re.DOTALL)
     return [match.strip() for match in matches]
 
@@ -218,13 +214,15 @@ Article Context:
         # to provide semantic mapping to the article item_id, along with the Q&A
         #
         article: Article = None
-        articles: List[Article] = []  # get from Archive
         summaries: List[str] = None
 
         # get articles from Archive
 
         # iterate over articles
-        for article in articles:
+        for item_id in [
+            i for d in article.publish_dates for i in archive.by_publish_date[d]
+        ]:
+            article = archive.get_article(item_id)
             if self.step_name in article.pipelines:
                 continue
 
@@ -234,13 +232,14 @@ Article Context:
                 for s in extract_summary_blocks(o, "SUMMARY")[-3:]
             ]
             for s in summaries:
-                response = self.gen_qa(self.qa_prompt(s))
+                response = self.gen_qa(self.qa_prompt(s), self.qty)
                 for r in response:
                     rr = self.tokenizer.decode(r)
                     q = extract_summary_blocks(rr, "QUESTION")[-1]
                     a = extract_summary_blocks(rr, "ANSWER")[-1]
-                    # TODO: Update Article to accept multiple summaries, questions, and answers
                     article.add_summary_and_qa(s, q, a)
+            article.pipelines[self.step_name] = datetime.now().isoformat()
+            article.pickle()
 
     def generate_summary(self, prompt: str, qty: int):
         """generate_summary"""
