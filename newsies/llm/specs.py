@@ -2,6 +2,7 @@
 
 _TRAINED_DATES_PATH = "./training_data/trained_dates.pkl"
 _BASE_MODEL_NAME = "mistralai/Mistral-7B-v0.3"
+_INSTRUCT_MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.3"
 BOOKS = "📚"
 CLEAN = "🧹"
 DISK = "💾"

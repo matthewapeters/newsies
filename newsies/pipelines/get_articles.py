@@ -25,6 +25,31 @@ def get_articles_pipeline(task_id: str):
     print("\nGET ARTICLES\n")
     TASK_STATUS[task_id] = "started"
     try:
+
+        # Get Archive
+
+        # Get latest website headlines
+        # with a visitor and add to Archive
+
+        # Use a visitor to download the articles
+        # and add to Archive
+
+        # Uas a visitor to extract NER from articles
+        # in the Archive
+
+        # Use a visitor to format the articles in the Archive
+        # for use in LLM training
+
+        # User a visitor to generate embeddings
+        # for the articles in the Archive
+
+        # Use a visitor to index the articles in the Archive
+        # for use in LLM training
+
+        ##########################
+        # OLD PROCESS
+        ##########################
+
         print("\n\t- retrieving headlines\n")
         TASK_STATUS[task_id] = "running - step: retrieving headlines"
         # get the latest news links from AP press and pickle for downstream use

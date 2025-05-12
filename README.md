@@ -18,6 +18,12 @@ It is anticipated that this will provide an API service for projects like Jarvus
     - [Strategies](#strategies)
       - [RAG](#rag)
       - [PEFT LoRA Adapter Model Fine Tuning](#peft-lora-adapter-model-fine-tuning)
+  - [The LoRA Adapter Fine-Tuning Strategy](#the-lora-adapter-fine-tuning-strategy)
+    - [Pipelines](#pipelines)
+    - [Get Articles Pipeline](#get-articles-pipeline)
+    - [Analyze Pipeline](#analyze-pipeline)
+    - [LLM Training Pipeline](#llm-training-pipeline)
+    - [Daily-Run Pipeline](#daily-run-pipeline)
   - [Article Clustering](#article-clustering)
   - [Pydep Graph of Newsies Modules](#pydep-graph-of-newsies-modules)
     - [Technologies Used in Newsies](#technologies-used-in-newsies)
@@ -143,13 +149,53 @@ This is the current approach.  With this approach, there is little to no prompt 
   - Use the clusters to identify which stories' training data to use.  Schedule a training session for each cluster.  Training sessions are asynchronous.
 - The application, at run-time, will use the most recently fine-tuned LoRA Adapter with the model, even if training is ongoing.  The bet is that most questions will be related to central stories.  Over time, less central stories will make it intod the model from the corpus.
 
+## The LoRA Adapter Fine-Tuning Strategy
+
+### Pipelines
+
+There are several tasks in shepherding the information from articles into the LLM.  A design for organizing data in a systematically retrievable way must be implemented.  Large processes must be broken into atomic units of work that can be "committed" when complete -- meaning the system can detect that the unit of work is complete and does not need to be re-processed.  An interface for initiating processes and tracking their progress, success, and failures must be designed and implemented.  If necessary, steps need to be reversed and undone so features and corrections can be added to atomic tasks and pipelines and the data can be reprocessed.  This is the approach I have chosen to follow.
+
+Pipelines define a sequence of atomic tasks that will run against a common collection of data representing a fairly well-defined and stable segment of the corpus.  I have chosen the Publish Date as the basis for clustering data.  Each pipeline processes a distinct family of tasks against a collection of the corpus data.  Under normal execution, each publish date is processed once through the pipeline, and the daily
+routine will focus on handling the most recent collection of data.  Eventual feature updates will provide for chosing an arbitrary publish date and re-run pipelines -- the assumption for this is that articles
+may be made available or found for a publish date after the date was initially processed.
+
+The data collections include:
+
+1) Individual Articles
+2) Datasets or DataFrames of information extracted from Articles
+
+The families of work are:
+
+1) Retrieving and on-boarding articles.  This includes extracting NERs, creating article embeddings, and indexing articles into the high-dimensional database (ChromaDB)
+2) Analyzing articles.  This includes clustering articles based on semantic similarity.
+3) Fine-tuning the LLM with data extracted from the articles.  This is includes converting articles into data frames and data sets.
+
+I have found the cleanest way to organize the code for pipelines is as follows:
+
+1) Define a class that represents the collection as an object.
+2) Define a module for managing the sequential application of tasks
+3) Represent each task as a Visitor class.  The collection object is then visited by these in turn.  The visitor may iterate over constituent parts serially or it may parallelize the work.
+
+### Get Articles Pipeline
+
+As new articles are found and retrieved, they are registered with other articles sharing the same publish date (all dates are UTC).  This registration is maintained in Redis.  When an atomic task
+for a Publish Date is complete, the publish date and its member articles are added dictionary that is pickled to disk specific for the task.  When a pipeline is run, it compares registered articles (including protentially newly discovered articles) against the completed articles.  Completed articles are skipped.  New articles are processed and the completed article is added to the pickled dictionary.  The pipeline
+itself is not atomic, the task per unit of work is atomic.  When a task is complete for an article, the task is registered within the article object which is also pickled, providing a history of when the task was completed for the article, and allowing tasks to be interrupted mid-stream and resumed without re-processing each task for the article that has been completed.  The commit of the task is at the time the article
+is pickled.
+
+### Analyze Pipeline
+
+### LLM Training Pipeline
+
+### Daily-Run Pipeline
+
 ## Article Clustering
 
 ![articles clusterd by KNN](./docs/semanitc_clustering.png)
 
 `One day's worth of articles clustered by KNN`
 
-the `/dashboard/` endpoint shows how the lastest collection of articles cluster when KNN is applied across all of the articles collected to-date.  The goal is to break the heavy-lift of fine-tuning across clustered batches.
+the `/dashboard/` endpoint shows how the lastest collection of articles cluster when KNN is applied across all of the articles collected to-date.  Initially, the goal is to break the heavy-lift of fine-tuning across clustered batches, but training based on date published is more direct and manageable.  It also provides for better control or training interruption and resumption, as publish dates are less changing than clusters.  There is one cluster created for stories that are quite dissimilar to others (represented by multiple colors in the cluster ring and a lack of connecting edges).  This cluster starts quite small but eventually grows larger than any onther cluster.  I am not sure what the basis for this phenonmenon is, as there is not a direct way of identifing _what_ clusters articles together. Articles cluster based on semantic embedding proximity - but the subject of their proximity cannot -- yet -- be retrieved to explain what they share in common.
 
 ## Pydep Graph of Newsies Modules
 

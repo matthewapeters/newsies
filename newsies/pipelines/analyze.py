@@ -22,6 +22,26 @@ def analyze_pipeline(task_id: str, archive: str = None):
     TASK_STATUS[task_id] = "start"
     try:
 
+        # get the Archive
+
+        # NOTE: Summaries, Questions, and Answers will be stored as both decoded
+        # text and embedding in each article.  Creating the dataframes for training
+        # that uses these will be part of the training pipeline.
+
+        # Using a visitor, generate summaries for the articles in the Archive
+        # Add summaries to the articles in the Archive
+
+        # Using a visitor and Mistral-instruct LLM, generate questions and
+        # answers from the article summaries in the Archive
+
+        # Using a visitor and Mistral-Instruct LLM, generate questions and answers
+        # for NERs in the Archive articles.  Add questions and answers to the
+        # articles in the Archive
+
+        # Using a visitor and Mistral-Instruct LLM, generate questions and answers
+        # for pairs of NERs in the Archive Articles.  Add questions and answers to the
+        # articles in the Archive
+
         print("\n\t- creating knn graph of stories\n")
         TASK_STATUS[task_id] = "running - step: Creating KNN Graph"
         generate_knn_graph()
