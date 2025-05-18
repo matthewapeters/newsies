@@ -1,3 +1,3 @@
 """newsies.visitor"""
 
-from .visitor import Visitor, BatchSetVisitor, ArchiveVisitor
+from .visitor import Visitor

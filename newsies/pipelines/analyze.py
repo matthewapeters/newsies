@@ -31,7 +31,7 @@ def analyze_pipeline(task_id: str, archive: str = None):
         # that uses these will be part of the training pipeline.
 
         # Using a visitor, generate summaries for the articles in the Archive
-        # and generate questions and # answers from the article summaries. Add
+        # and generate questions and answers from the article summaries. Add
         # summaries, questions, and answers to the articles
         v = SummarizeVisitor()
         v.visit(archive)

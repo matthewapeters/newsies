@@ -12,7 +12,7 @@ from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
 )
-from newsies.visitor import ArchiveVisitor
+from newsies.ap_news.archive_visitor import ArchiveVisitor
 from newsies.ap_news.archive import Archive
 from newsies.ap_news.article import Article
 
@@ -196,6 +196,23 @@ Article Context:
             num_return_sequences=qty,
         )
 
+    def generate_summary(self, prompt: str, qty: int):
+        """generate_summary"""
+        input_ids = self.tokenizer(prompt, return_tensors="pt")["input_ids"]
+        input_ids = input_ids.to("cuda")
+        resp = self.model.generate(
+            input_ids,
+            max_length=2048,
+            temperature=0.7,
+            top_p=0.98,
+            do_sample=True,
+            num_return_sequences=qty,
+        )
+        output = []
+        for i in range(qty):
+            output.append(self.tokenizer.decode(resp[i]))
+        return output
+
     def visit_archive(self, archive: Archive):
         """visit_archive
 
@@ -219,18 +236,19 @@ Article Context:
         # get articles from Archive
 
         # iterate over articles
-        for item_id in [
-            i for d in article.publish_dates for i in archive.by_publish_date[d]
+        for pub_date, item_id in [
+            (d, i) for d in article.publish_dates for i in archive.by_publish_date[d]
         ]:
             article = archive.get_article(item_id)
             if self.step_name in article.pipelines:
                 continue
-
+            print(f"Generate Summaries for {pub_date}: {item_id}")
             summaries = [
                 s
                 for o in self.generate_summary(self.get_prompt(article), self.qty)
                 for s in extract_summary_blocks(o, "SUMMARY")[-3:]
             ]
+            print(f"Generate Questions for {pub_date}: {item_id}")
             for s in summaries:
                 response = self.gen_qa(self.qa_prompt(s), self.qty)
                 for r in response:
@@ -240,20 +258,4 @@ Article Context:
                     article.add_summary_and_qa(s, q, a)
             article.pipelines[self.step_name] = datetime.now().isoformat()
             article.pickle()
-
-    def generate_summary(self, prompt: str, qty: int):
-        """generate_summary"""
-        input_ids = self.tokenizer(prompt, return_tensors="pt")["input_ids"]
-        input_ids = input_ids.to("cuda")
-        resp = self.model.generate(
-            input_ids,
-            max_length=2048,
-            temperature=0.7,
-            top_p=0.98,
-            do_sample=True,
-            num_return_sequences=qty,
-        )
-        output = []
-        for i in range(qty):
-            output.append(self.tokenizer.decode(resp[i]))
-        return output
+            print(f"{pub_date}: {item_id} Complete")

@@ -23,7 +23,7 @@ import pandas as pd
 
 # from newsies.ap_news.archive import get_archive, Archive
 from newsies.llm import BatchSet
-from newsies.visitor import BatchSetVisitor
+from newsies.llm.batch_set_visitor import BatchSetVisitor
 from .specs import CORPUS_PROMPT
 
 # pylint: disable=broad-exception-caught

@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from newsies.ap_news.article import Article
-from newsies.visitor.visitor import BatchSetVisitor
+from newsies.llm.batch_set_visitor import BatchSetVisitor
 
 from ..llm.specs import (
     ARTICLE_END,

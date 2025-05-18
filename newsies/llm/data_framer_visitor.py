@@ -9,7 +9,7 @@ from datasets import Dataset
 import torch
 
 from newsies.llm.batch_set import BatchSet
-from newsies.visitor import BatchSetVisitor
+from newsies.llm.batch_set_visitor import BatchSetVisitor
 
 # pylint: disable=broad-exception-caught
 

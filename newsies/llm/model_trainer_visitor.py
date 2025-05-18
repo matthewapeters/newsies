@@ -22,7 +22,7 @@ from transformers import (
 from transformers.utils import logging as hfu_logging
 
 from newsies.llm.batch_set import BatchSet
-from newsies.visitor import BatchSetVisitor
+from newsies.llm.batch_set_visitor import BatchSetVisitor
 
 from .load_latest import load_base_model_with_lora
 from .specs import (

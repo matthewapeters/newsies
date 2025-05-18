@@ -18,7 +18,7 @@ import pandas as pd
 
 
 from newsies.llm import BatchSet
-from newsies.visitor import BatchSetVisitor
+from newsies.llm.batch_set_visitor import BatchSetVisitor
 
 # pylint: disable=broad-exception-raised, broad-exception-caught
 

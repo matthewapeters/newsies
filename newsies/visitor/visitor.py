@@ -109,33 +109,3 @@ class Visitor(ABC):
     def step_name(self) -> str:
         """step_name"""
         return self._step_name
-
-
-class BatchSetVisitor(Visitor):
-    """BatchSetVisitor"""
-
-    def visit_target(self, target: Any):
-        t: BatchSet = target
-        self.visit_batch_set(t)
-
-    @abstractmethod
-    def visit_batch_set(self, batch_set: Any):
-        """
-        Visit the BatchSet class and train a machine learning model.
-        """
-        raise NotImplementedError("visit_batch_set not implemented")
-
-
-class ArchiveVisitor(Visitor):
-    """ArchiveVisitor"""
-
-    def visit_target(self, target: Any):
-        t: Archive = target
-        self.visit_archive(t)
-
-    @abstractmethod
-    def visit_archive(self, archive: Archive):
-        """
-        visit_archive
-            Visit the Archive class instance and process articles
-        """
