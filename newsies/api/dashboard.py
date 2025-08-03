@@ -152,7 +152,9 @@ def generate_styles(edge_classes_set, node_classes_set):
                     "line-style": "dashed",
                     "width": 2,
                     "line-fill": "gradient",
-                    "line-gradient-stop-colors": f"{cls.split("-")[2]} {cls.split("-")[1]}",
+def get_knn_graph_data(
+    get_data: Callable = get_knn_graph
+) -> Dict[str, Any]:
                 },
             }
             for cls in edge_classes_set
@@ -179,7 +181,16 @@ DASHBOARD_APP.layout = html.Div(
                                 html.Td(
                                     [
                                         html.H5("Recently Published Date Offset"),
-                                        # add a cytocytoscape slider from 0 to 90, mapped to the offset
+nodes.append(
+    {
+        "data": {
+            "id": doc_id,
+            "label": title[:50] + "..." if len(title) > 50 else title,
+            "title": title,
+            "url": url,
+        }
+    }
+)
                                         dcc.Slider(
                                             id="offset-slider",
                                             min=0,

@@ -155,9 +155,11 @@ async def run_daily_pipeline(request: Request, background_tasks: BackgroundTasks
     """
     run_daily_pipeline
     run the daily pipeline
-    * the pipeline checks the Associated Press website for any articles in each of its sections.
+    * the pipeline checks the Associated Press website for any articles in each
+    of its sections.
     Articles are then downloaded to local cache and embedded in search engine
-    * the pipeline summarizes all stories, searches and adds named enttities and n-grams
+    * the pipeline summarizes all stories, searches and adds named
+    enttities and n-grams
     to the search engine
     * the pipeline trains the model
     """
@@ -219,7 +221,8 @@ async def run_get_news_pipeline(
     """
     run_get_news_pipeline
     run the get-news pipeline
-    the pipeline checks the Associated Press website for any articles in each of its sections.
+    the pipeline checks the Associated Press website for any articles in
+    each of its sections.
     Articles are then downloaded to local cache and embedded in search engine
     """
     username = request.cookies[USER_COOKIE_NAME]

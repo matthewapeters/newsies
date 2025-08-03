@@ -1,0 +1,134 @@
+# Global configuration
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+
+# Infrastructure components
+# Redis configuration - matching Docker Compose setup
+redis:
+  enabled: true
+  redis:
+    auth:
+      enabled: true
+      username: "user2"
+      password: "redisCache123#"
+    persistence:
+      enabled: true
+      size: 8Gi
+      hostPath: "/home/mpeters/Projects/newsies/docker/redis_data"
+    config:
+      save: "60 1"
+      loglevel: "warning"
+      existingClaim: "newsies-redis-data"
+  replica:
+    replicaCount: 1
+
+chromadb:
+  enabled: true
+  chromadb:
+    auth:
+      enabled: true
+      username: "user1"
+      password: "password123"
+    allowReset: "TRUE"
+    anonymizedTelemetry: "TRUE"
+    isPersistent: "TRUE"
+    persistence:
+      enabled: true
+      size: 10Gi
+      hostPath: "/home/mpeters/Projects/newsies/docker/chroma_data"
+  auth:
+    enabled: true
+    username: "newsies"
+    password: "newsies-chromadb-password"
+
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: "newsies-postgres-password"
+    username: "newsies"
+    password: "newsies-user-password"
+    database: "newsies"
+  primary:
+    persistence:
+      enabled: true
+      size: 10Gi
+      existingClaim: "newsies-postgres-data"
+
+# Application services
+newsies-api:
+  replicaCount: 2
+  image:
+    repository: newsies/api
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: LoadBalancer
+    port: 8000
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+
+newsies-scraper:
+  replicaCount: 1
+  image:
+    repository: newsies/scraper
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 2Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+  persistence:
+    enabled: true
+    size: 50Gi
+    existingClaim: "newsies-articles-data"
+
+newsies-analyzer:
+  replicaCount: 1
+  image:
+    repository: newsies/analyzer
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 2000m
+      memory: 4Gi
+    limits:
+      cpu: 4000m
+      memory: 8Gi
+
+newsies-trainer:
+  replicaCount: 1
+  image:
+    repository: newsies/trainer
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 4000m
+      memory: 8Gi
+      nvidia.com/gpu: 1
+    limits:
+      cpu: 8000m
+      memory: 16Gi
+      nvidia.com/gpu: 1
+  nodeSelector:
+    accelerator: nvidia-tesla-k80
+  persistence:
+    enabled: true
+    size: 100Gi
+    existingClaim: "newsies-models-data"

@@ -1,0 +1,14 @@
+apiVersion: v2
+name: chromadb
+description: ChromaDB vector database for semantic search and embeddings
+type: application
+version: 0.1.0
+appVersion: "0.4.15"
+keywords:
+  - vector-database
+  - embeddings
+  - semantic-search
+  - chromadb
+home: https://www.trychroma.com/
+sources:
+  - https://github.com/chroma-core/chroma

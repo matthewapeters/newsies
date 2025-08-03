@@ -1,0 +1,180 @@
+version: '3.8'
+
+services:
+  # Infrastructure Services
+  redis:
+    image: redis:7-alpine
+    container_name: newsies-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./docker/redis-data:/data
+      - ./docker/redis-users.acl:/etc/redis/users.acl:ro
+    command: >
+      redis-server
+      --aclfile /etc/redis/users.acl
+      --requirepass ${REDIS_PASSWORD:-password}
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-password}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - newsies-network
+
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: newsies-chromadb
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./docker/chroma-data:/chroma/chroma
+      - ./docker/.chroma_env:/chroma/.env:ro
+    environment:
+      - CHROMA_SERVER_HOST=0.0.0.0
+      - CHROMA_SERVER_HTTP_PORT=8000
+      - CHROMA_SERVER_AUTH_CREDENTIALS_FILE=/chroma/.env
+      - CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER=chromadb.auth.basic_authn.BasicAuthCredentialsProvider
+      - CHROMA_SERVER_AUTH_PROVIDER=chromadb.auth.basic_authn.BasicAuthenticationServerProvider
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - newsies-network
+
+  # Newsies Microservices
+  newsies-api:
+    build:
+      context: .
+      dockerfile: newsies-api/Dockerfile
+    container_name: newsies-api
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_CREDS=${REDIS_USER:-default}:${REDIS_PASSWORD:-password}
+      - CHROMADB_HOST=chromadb
+      - CHROMADB_PORT=8000
+      - CHROMADB_USER=${CHROMADB_USER:-admin}
+      - CHROMADB_CREDS=${CHROMADB_PASSWORD:-password}
+    depends_on:
+      redis:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - newsies-network
+
+  newsies-scraper:
+    build:
+      context: .
+      dockerfile: newsies-scraper/Dockerfile
+    container_name: newsies-scraper
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_CREDS=${REDIS_USER:-default}:${REDIS_PASSWORD:-password}
+      - CHROMADB_HOST=chromadb
+      - CHROMADB_PORT=8000
+      - CHROMADB_USER=${CHROMADB_USER:-admin}
+      - CHROMADB_CREDS=${CHROMADB_PASSWORD:-password}
+    depends_on:
+      redis:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+    networks:
+      - newsies-network
+
+  newsies-analyzer:
+    build:
+      context: .
+      dockerfile: newsies-analyzer/Dockerfile
+    container_name: newsies-analyzer
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_CREDS=${REDIS_USER:-default}:${REDIS_PASSWORD:-password}
+      - CHROMADB_HOST=chromadb
+      - CHROMADB_PORT=8000
+      - CHROMADB_USER=${CHROMADB_USER:-admin}
+      - CHROMADB_CREDS=${CHROMADB_PASSWORD:-password}
+      - TOKENIZERS_PARALLELISM=false
+    depends_on:
+      redis:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+    networks:
+      - newsies-network
+
+  newsies-trainer:
+    build:
+      context: .
+      dockerfile: newsies-trainer/Dockerfile
+    container_name: newsies-trainer
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_CREDS=${REDIS_USER:-default}:${REDIS_PASSWORD:-password}
+      - CHROMADB_HOST=chromadb
+      - CHROMADB_PORT=8000
+      - CHROMADB_USER=${CHROMADB_USER:-admin}
+      - CHROMADB_CREDS=${CHROMADB_PASSWORD:-password}
+      - TOKENIZERS_PARALLELISM=false
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+    depends_on:
+      redis:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - newsies-network
+
+  newsies-cli:
+    build:
+      context: .
+      dockerfile: newsies-cli/Dockerfile
+    container_name: newsies-cli
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_CREDS=${REDIS_USER:-default}:${REDIS_PASSWORD:-password}
+      - CHROMADB_HOST=chromadb
+      - CHROMADB_PORT=8000
+      - CHROMADB_USER=${CHROMADB_USER:-admin}
+      - CHROMADB_CREDS=${CHROMADB_PASSWORD:-password}
+    depends_on:
+      redis:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+    networks:
+      - newsies-network
+    stdin_open: true
+    tty: true
+
+networks:
+  newsies-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  chroma-data:

@@ -1,0 +1,51 @@
+apiVersion: v2
+name: newsies
+description: Interactive News Explorer - AI-enhanced conversational news discovery
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - news
+  - ai
+  - llm
+  - rag
+  - microservices
+home: https://github.com/matthewapeters/newsies
+sources:
+  - https://github.com/matthewapeters/newsies
+maintainers:
+  - name: Matthew Peters
+    email: matthew.peters@example.com
+
+dependencies:
+  # Infrastructure services
+  - name: redis
+    version: "0.1.0"
+    repository: "file://../redis"
+    condition: redis.enabled
+  - name: chromadb
+    version: "0.1.0"
+    repository: "file://../chromadb"
+    condition: chromadb.enabled
+  
+  # Newsies microservices
+  - name: newsies-api
+    version: "0.1.0"
+    repository: "file://../newsies-api"
+    condition: newsies-api.enabled
+  - name: newsies-scraper
+    version: "0.1.0"
+    repository: "file://../newsies-scraper"
+    condition: newsies-scraper.enabled
+  - name: newsies-analyzer
+    version: "0.1.0"
+    repository: "file://../newsies-analyzer"
+    condition: newsies-analyzer.enabled
+  - name: newsies-trainer
+    version: "0.1.0"
+    repository: "file://../newsies-trainer"
+    condition: newsies-trainer.enabled
+  - name: newsies-cli
+    version: "0.1.0"
+    repository: "file://../newsies-cli"
+    condition: newsies-cli.enabled

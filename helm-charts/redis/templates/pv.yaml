@@ -1,0 +1,33 @@
+{{- if .Values.redis.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "redis.fullname" . }}-pv
+  labels:
+    {{- include "redis.labels" . | nindent 4 }}
+spec:
+  capacity:
+    storage: {{ .Values.redis.persistence.size }}
+  accessModes:
+    - {{ .Values.redis.persistence.accessMode }}
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: {{ .Values.redis.persistence.storageClass | default "manual" }}
+  hostPath:
+    path: {{ .Values.redis.persistence.hostPath }}
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "redis.fullname" . }}-pvc
+  labels:
+    {{- include "redis.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.redis.persistence.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.redis.persistence.size }}
+  storageClassName: {{ .Values.redis.persistence.storageClass | default "manual" }}
+  volumeName: {{ include "redis.fullname" . }}-pv
+{{- end }}

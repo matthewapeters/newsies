@@ -10,9 +10,12 @@ from torch.nn import Module
 
 from newsies.session.turn import Turn
 from newsies.redis_client import REDIS
-from newsies.llm import load_base_model_with_lora, CORPUS_PROMPT, tokenize, decode
-
-# pylint: disable=broad-exception-caught, protected-access, unnecessary-lambda, too-many-instance-attributes, invalid-name
+from newsies.llm import (
+    load_base_model_with_lora,
+    CORPUS_PROMPT,
+    tokenize,
+    decode
+)
 
 
 def get_session_params(session_id: str):

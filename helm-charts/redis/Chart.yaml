@@ -1,0 +1,19 @@
+apiVersion: v2
+name: redis
+description: Redis cache and session store for Newsies
+type: application
+version: 0.1.0
+appVersion: "7.0"
+
+keywords:
+  - redis
+  - cache
+  - session
+  - newsies
+
+maintainers:
+  - name: newsies-team
+    email: newsies@example.com
+
+sources:
+  - https://github.com/redis/redis

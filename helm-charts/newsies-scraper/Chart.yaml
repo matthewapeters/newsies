@@ -1,0 +1,14 @@
+apiVersion: v2
+name: newsies-scraper
+description: Newsies Scraper Service - News scraping and article processing pipeline
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - scraper
+  - news
+  - articles
+  - processing
+home: https://github.com/matthewapeters/newsies
+sources:
+  - https://github.com/matthewapeters/newsies

@@ -1,0 +1,14 @@
+apiVersion: v2
+name: newsies-api
+description: Newsies API Gateway - FastAPI service with dashboard and session management
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - api
+  - gateway
+  - fastapi
+  - dashboard
+home: https://github.com/matthewapeters/newsies
+sources:
+  - https://github.com/matthewapeters/newsies

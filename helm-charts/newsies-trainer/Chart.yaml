@@ -1,0 +1,15 @@
+apiVersion: v2
+name: newsies-trainer
+description: Newsies Trainer Service - LLM fine-tuning with LoRA adapters (GPU-enabled)
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - trainer
+  - llm
+  - lora
+  - fine-tuning
+  - gpu
+home: https://github.com/matthewapeters/newsies
+sources:
+  - https://github.com/matthewapeters/newsies

@@ -500,7 +500,8 @@ def get_latest_training_data(
         raise OSError(msg)
     dirs = os.listdir(base_dir)
     if len(dirs) == 0:
-        raise OSError("️No test data found. Please run get_train_and_test_data() first.")
+        raise OSError(
+            "️No test data found. Please run get_train_and_test_data() first.")
     dirs.sort()
     latest_dir = dirs[-1]
     train_dict: Dict[str, Dataset] = {}

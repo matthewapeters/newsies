@@ -1,0 +1,44 @@
+# Base Dockerfile for Newsies microservices
+# Multi-stage build for optimized images
+
+FROM python:3.12-slim as base
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app user
+RUN groupadd --gid 1000 appuser && \
+    useradd --uid 1000 --gid appuser --shell /bin/bash --create-home appuser
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements and install Python dependencies
+COPY requirements-workspace.txt .
+RUN pip install --no-cache-dir -r requirements-workspace.txt
+
+# Copy source code
+COPY . .
+
+# Install packages in development mode
+RUN pip install -e ./newsies-common && \
+    pip install -e ./newsies-clients
+
+# Change ownership to app user
+RUN chown -R appuser:appuser /app
+
+# Switch to app user
+USER appuser
+
+# Default command (to be overridden by specific services)
+CMD ["python", "-c", "print('Base image - specify service command')"]

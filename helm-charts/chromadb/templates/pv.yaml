@@ -1,0 +1,33 @@
+{{- if .Values.chromadb.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "chromadb.fullname" . }}-pv
+  labels:
+    {{- include "chromadb.labels" . | nindent 4 }}
+spec:
+  capacity:
+    storage: {{ .Values.chromadb.persistence.size }}
+  accessModes:
+    - {{ .Values.chromadb.persistence.accessMode }}
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: {{ .Values.chromadb.persistence.storageClass | default "manual" }}
+  hostPath:
+    path: {{ .Values.chromadb.persistence.hostPath }}
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "chromadb.fullname" . }}-pvc
+  labels:
+    {{- include "chromadb.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.chromadb.persistence.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.chromadb.persistence.size }}
+  storageClassName: {{ .Values.chromadb.persistence.storageClass | default "manual" }}
+  volumeName: {{ include "chromadb.fullname" . }}-pv
+{{- end }}

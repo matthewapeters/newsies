@@ -195,7 +195,9 @@ class ChromaDBClient:
         uris: List[str] = [None] * len(documents)
 
         for i, document in enumerate(documents.values()):
-            # read the document content from file if it is a DOCUMENT and we have a uri for it
+raise Exception(
+    "FAILED TO CONNECT TO CHROMA DB"
+)
             # otherwise, get the text from the document object (IE SUMMARYs)
             if document.target == DOCUMENT and uris is not None:
                 with open(document.uri, "r", encoding="utf8") as f:

@@ -1,0 +1,37 @@
+# Workspace requirements for newsies packages
+# Install in development mode for inter-package dependencies
+
+# Core packages (install in order)
+-e ./newsies-common
+-e ./newsies-clients
+-e ./newsies-scraper
+-e ./newsies-analyzer
+-e ./newsies-trainer
+-e ./newsies-api
+-e ./newsies-cli
+
+# External dependencies (consolidated from all packages)
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+spacy>=3.7.0
+sentence-transformers>=2.2.0
+nltk>=3.8.0
+transformers>=4.35.0
+torch>=2.1.0
+peft>=0.6.0
+datasets>=2.14.0
+accelerate>=0.24.0
+bitsandbytes>=0.41.0
+chromadb>=0.4.0
+redis>=5.0.0
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+dash>=2.14.0
+plotly>=5.17.0
+pandas>=2.1.0
+pydantic>=2.0.0
+click>=8.1.0
+rich>=13.6.0
+scikit-learn>=1.3.0
+networkx>=3.2.0

@@ -20,3 +20,43 @@ docker/redis-users.acl
 *.parquet
 *.jsonl
 lora_adapters.txt
+
+# Runtime artifacts and generated files
+lora_adapters/
+htmlcov/
+.coverage
+.pytest_cache/
+*.egg-info/
+.tox/
+.env
+.venv/
+env/
+venv/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.pid
+
+# Model and training artifacts
+models/
+checkpoints/
+runs/
+tensorboard_logs/

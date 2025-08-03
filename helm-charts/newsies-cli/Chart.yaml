@@ -1,0 +1,17 @@
+apiVersion: v2
+name: newsies-cli
+description: Newsies Command-Line Interface Service
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - newsies
+  - cli
+  - interface
+  - microservice
+home: https://github.com/matthewapeters/newsies
+sources:
+  - https://github.com/matthewapeters/newsies
+maintainers:
+  - name: Matthew Peters
+    email: matthew.peters@example.com

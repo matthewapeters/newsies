@@ -22,7 +22,7 @@ def select_collection(
 
     for i in range(0, len(_collections), 2):
         if i < len(_collections) - 1:
-            print(f"{_collections[i]}\t\t{_collections[i+1]}")
+            print(f"{_collections[i]}\t\t{_collections[i +1]}")
         else:
             print(f"{_collections[i]}")
     print("Enter an archive to read (ENTER for today): ", end="")
