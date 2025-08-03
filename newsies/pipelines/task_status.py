@@ -45,7 +45,7 @@ class AppStatus(dict):
         # when the status is a str, retrieve the task status record
         # an update the status - then make the value the task status
         # record
-        if isinstance(value, str):
+        if isinstance(value, str) and value in self:
             temp_value = self[key]
             temp_value["status"] = value
             value = temp_value
